@@ -106,6 +106,27 @@ python seed_mm_patients.py
 
 Outcome probabilities are drawn from published trial data (GRIFFIN, MAIA, KarMMa, CARTITUDE-1, DREAMM-2, etc.) and risk-adjusted for high-risk cytogenetics.
 
+## Deploying to Render
+
+**Root Directory:** `backend`
+
+**Build Command:**
+```
+pip install -r requirements.txt && python manage.py collectstatic --noinput
+```
+
+**Start Command:**
+```
+gunicorn analytics_project.wsgi:application --bind 0.0.0.0:$PORT
+```
+
+**Environment variables:**
+| Variable | Value |
+|---|---|
+| `DEBUG` | `false` |
+| `SECRET_KEY` | *(generate a random secret)* |
+| `CORS_ALLOWED_ORIGINS` | `https://your-frontend.onrender.com` |
+
 ## Database
 
 The backend connects to a CTOMOP PostgreSQL instance and reads from the `patient_info` denormalized view via an unmanaged Django model. Connection settings live in `backend/analytics_project/settings.py`.

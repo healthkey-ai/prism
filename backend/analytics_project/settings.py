@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -24,6 +24,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
 ]
 
@@ -46,6 +47,8 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_TZ = True
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -56,9 +59,11 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+_extra_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    *([o for o in _extra_origins.split(",") if o]),
 ]
 
 TEMPLATES = [
