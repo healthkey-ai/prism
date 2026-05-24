@@ -112,7 +112,7 @@ Outcome probabilities are drawn from published trial data (GRIFFIN, MAIA, KarMMa
 
 **Build Command:**
 ```
-pip install -r requirements.txt && cd ../frontend && npm ci && npm run build && cd ../backend && python manage.py collectstatic --noinput
+pip install -r requirements.txt && python manage.py collectstatic --noinput
 ```
 
 **Start Command:**
