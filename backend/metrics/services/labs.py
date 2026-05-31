@@ -1,4 +1,4 @@
-import statistics
+from django.db import connection
 
 
 LAB_FIELDS = [
@@ -14,26 +14,42 @@ LAB_FIELDS = [
 ]
 
 
-def _stats(values):
-    vals = sorted(float(v) for v in values if v is not None)
-    if not vals:
-        return None
-    n = len(vals)
-    return {
-        "median": round(statistics.median(vals), 2),
-        "q1":     round(vals[int(n * 0.25)], 2),
-        "q3":     round(vals[int(n * 0.75)], 2),
-        "min":    round(vals[0], 2),
-        "max":    round(vals[-1], 2),
-        "n":      n,
-    }
+def compute(qs):
+    subq_sql, params = qs.values('id').query.sql_with_params()
 
+    # All 9 lab fields in one query using Postgres PERCENTILE_CONT
+    selects = []
+    for key, field, _, _ in LAB_FIELDS:
+        f = f'"{field}"'
+        selects += [
+            f"PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY {f}) AS {key}_median",
+            f"PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY {f}) AS {key}_q1",
+            f"PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY {f}) AS {key}_q3",
+            f"MIN({f})   AS {key}_min",
+            f"MAX({f})   AS {key}_max",
+            f"COUNT({f}) AS {key}_n",
+        ]
 
-def compute(records):
+    sql = f"SELECT {', '.join(selects)} FROM patient_info WHERE id IN ({subq_sql})"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        cols = [col[0] for col in cursor.description]
+
+    data = dict(zip(cols, row))
     result = {}
-    for key, field, unit, label in LAB_FIELDS:
-        values = [r[field] for r in records if r.get(field) is not None]
-        stats = _stats(values)
-        if stats:
-            result[key] = {**stats, "unit": unit, "label": label}
+    for key, _, unit, label in LAB_FIELDS:
+        n = data.get(f'{key}_n')
+        if n:
+            result[key] = {
+                "median": round(float(data[f'{key}_median']), 2),
+                "q1":     round(float(data[f'{key}_q1']),     2),
+                "q3":     round(float(data[f'{key}_q3']),     2),
+                "min":    round(float(data[f'{key}_min']),    2),
+                "max":    round(float(data[f'{key}_max']),    2),
+                "n":      int(n),
+                "unit":   unit,
+                "label":  label,
+            }
     return result

@@ -1,88 +1,86 @@
-from collections import Counter
+from django.db.models import Count, Q
 
 
-def compute(records):
-    total = len(records)
+def compute(qs):
+    total = qs.count()
     if not total:
         return {}
 
     def pct(n):
         return round(n / total * 100, 1) if total else 0
 
-    # ISS / disease stage
-    stage_counts = Counter(r["stage"] for r in records if r.get("stage"))
-    stages = [{"stage": s, "count": c, "pct": pct(c)}
-              for s, c in sorted(stage_counts.items())]
+    # ISS stage
+    stage_rows = (
+        qs.exclude(stage__isnull=True)
+        .values('stage').annotate(count=Count('id')).order_by('stage')
+    )
+    stages = [{"stage": r['stage'], "count": r['count'], "pct": pct(r['count'])}
+              for r in stage_rows]
 
     # ECOG
-    ecog_counts = Counter(
-        r["ecog_performance_status"] for r in records
-        if r.get("ecog_performance_status") is not None
+    ecog_rows = (
+        qs.exclude(ecog_performance_status__isnull=True)
+        .values('ecog_performance_status').annotate(count=Count('id'))
+        .order_by('ecog_performance_status')
     )
-    ecog = [{"ecog": e, "count": c, "pct": pct(c)}
-            for e, c in sorted(ecog_counts.items())]
+    ecog = [{"ecog": r['ecog_performance_status'], "count": r['count'],
+             "pct": pct(r['count'])} for r in ecog_rows]
 
-    # CRAB (MM)
-    crab_met = sum(1 for r in records if r.get("meets_crab") is True)
-    crab_not = sum(1 for r in records if r.get("meets_crab") is False)
+    # All scalar counts in one aggregate() call — replaces 8 separate .count() queries
+    HIGH_RISK = (
+        Q(cytogenic_markers__icontains='del(17p)') |
+        Q(cytogenic_markers__icontains='t(4;14)') |
+        Q(cytogenic_markers__icontains='t(14;16)')
+    )
+    agg = qs.aggregate(
+        crab_met=Count('id',    filter=Q(meets_crab=True)),
+        crab_not=Count('id',    filter=Q(meets_crab=False)),
+        del17p=Count('id',      filter=Q(cytogenic_markers__icontains='del(17p)')),
+        t414=Count('id',        filter=Q(cytogenic_markers__icontains='t(4;14)')),
+        t1416=Count('id',       filter=Q(cytogenic_markers__icontains='t(14;16)')),
+        q121=Count('id',        filter=Q(cytogenic_markers__icontains='1q21')),
+        hyperdiploid=Count('id',filter=Q(cytogenic_markers__icontains='hyperdiploidy')),
+        std_risk=Count('id',    filter=~HIGH_RISK & (Q(cytogenic_markers='') | Q(cytogenic_markers__isnull=True))),
+        sct_count=Count('id',   filter=~Q(stem_cell_transplant_history__isnull=True) & ~Q(stem_cell_transplant_history=[])),
+    )
+
+    crab_met = agg['crab_met']
+    crab_not = agg['crab_not']
     crab = [
         {"label": "CRAB Met",     "count": crab_met, "pct": pct(crab_met)},
         {"label": "CRAB Not Met", "count": crab_not, "pct": pct(crab_not)},
     ] if (crab_met + crab_not) else []
 
-    # Cytogenetics
-    HIGH_RISK_KEYWORDS = ("del(17p)", "t(4;14)", "t(14;16)")
-
-    def contains(markers, keyword):
-        return bool(markers) and keyword.lower() in markers.lower()
-
-    def is_high_risk(markers):
-        return any(contains(markers, kw) for kw in HIGH_RISK_KEYWORDS)
-
     cyto_groups = [
-        ("del(17p)",           True,  "del(17p)"),
-        ("t(4;14)",            True,  "t(4;14)"),
-        ("t(14;16)",           True,  "t(14;16)"),
-        ("1q21 amplification", False, "1q21"),
-        ("Hyperdiploidy",      False, "hyperdiploidy"),
-        ("Standard Risk",      False, None),
+        ("del(17p)",           True,  agg['del17p']),
+        ("t(4;14)",            True,  agg['t414']),
+        ("t(14;16)",           True,  agg['t1416']),
+        ("1q21 amplification", False, agg['q121']),
+        ("Hyperdiploidy",      False, agg['hyperdiploid']),
+        ("Standard Risk",      False, agg['std_risk']),
     ]
-    cytogenetics = []
-    for label, high_risk, keyword in cyto_groups:
-        if keyword:
-            count = sum(1 for r in records if contains(r.get("cytogenic_markers"), keyword))
-        else:
-            count = sum(
-                1 for r in records
-                if not is_high_risk(r.get("cytogenic_markers"))
-                and not r.get("cytogenic_markers")
-            )
-        if count:
-            cytogenetics.append({"marker": label, "count": count,
-                                  "pct": pct(count), "high_risk": high_risk})
+    cytogenetics = [
+        {"marker": label, "count": count, "pct": pct(count), "high_risk": high_risk}
+        for label, high_risk, count in cyto_groups if count
+    ]
 
-    # SCT history
-    def has_sct(val):
-        if val is None:
-            return False
-        if isinstance(val, list):
-            return len(val) > 0
-        return bool(val)
-
-    sct_count = sum(1 for r in records if has_sct(r.get("stem_cell_transplant_history")))
+    sct_count = agg['sct_count']
 
     # Bone lesions
-    bone_counts = Counter(r["bone_lesions"] for r in records if r.get("bone_lesions"))
-    bone_lesions = [{"type": t, "count": c, "pct": pct(c)}
-                    for t, c in bone_counts.most_common()]
+    bone_rows = (
+        qs.exclude(bone_lesions__isnull=True)
+        .values('bone_lesions').annotate(count=Count('id')).order_by('-count')
+    )
+    bone_lesions = [{"type": r['bone_lesions'], "count": r['count'],
+                     "pct": pct(r['count'])} for r in bone_rows]
 
     # Refractory status
-    refractory_counts = Counter(
-        r["treatment_refractory_status"] for r in records
-        if r.get("treatment_refractory_status")
+    refractory_rows = (
+        qs.exclude(treatment_refractory_status__isnull=True)
+        .values('treatment_refractory_status').annotate(count=Count('id')).order_by('-count')
     )
-    refractory = [{"status": s, "count": c, "pct": pct(c)}
-                  for s, c in refractory_counts.most_common()]
+    refractory = [{"status": r['treatment_refractory_status'], "count": r['count'],
+                   "pct": pct(r['count'])} for r in refractory_rows]
 
     return {
         "stages":            stages,

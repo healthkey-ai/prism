@@ -1,4 +1,5 @@
 from collections import defaultdict
+from django.db.models import Count
 
 
 OUTCOME_ORDER = [
@@ -12,33 +13,37 @@ OUTCOME_ORDER = [
 RESPONDING = {"Complete Response", "Very Good Partial Response", "Partial Response"}
 
 
-def _therapy_response_table(records, therapy_field, outcome_field):
+def _therapy_response_table(qs, therapy_field, outcome_field):
+    rows = (
+        qs.exclude(**{f'{therapy_field}__isnull': True})
+        .exclude(**{f'{therapy_field}__exact': ''})
+        .values(therapy_field, outcome_field)
+        .annotate(n=Count('id'))
+        .order_by(therapy_field, outcome_field)
+    )
+
     grouped = defaultdict(lambda: defaultdict(int))
-    for r in records:
-        therapy = r.get(therapy_field)
-        if not therapy:
-            continue
-        outcome = r.get(outcome_field) or "Unknown"
-        grouped[therapy][outcome] += 1
+    for r in rows:
+        grouped[r[therapy_field]][r[outcome_field] or 'Unknown'] += r['n']
 
     result = []
     for therapy, outcomes in grouped.items():
         total = sum(outcomes.values())
         responding = sum(v for k, v in outcomes.items() if k in RESPONDING)
         result.append({
-            "therapy": therapy,
+            "therapy":  therapy,
             "outcomes": {o: outcomes[o] for o in OUTCOME_ORDER if outcomes.get(o)},
-            "total": total,
-            "orr_pct": round(responding / total * 100, 1) if total else 0,
+            "total":    total,
+            "orr_pct":  round(responding / total * 100, 1) if total else 0,
         })
 
-    result.sort(key=lambda x: -x["total"])
+    result.sort(key=lambda x: -x['total'])
     return result
 
 
-def compute(records):
+def compute(qs):
     return {
-        "first_line":  _therapy_response_table(records, "first_line_therapy",  "first_line_outcome"),
-        "second_line": _therapy_response_table(records, "second_line_therapy", "second_line_outcome"),
-        "later_line":  _therapy_response_table(records, "later_therapy",       "later_outcome"),
+        "first_line":  _therapy_response_table(qs, 'first_line_therapy',  'first_line_outcome'),
+        "second_line": _therapy_response_table(qs, 'second_line_therapy', 'second_line_outcome'),
+        "later_line":  _therapy_response_table(qs, 'later_therapy',       'later_outcome'),
     }
