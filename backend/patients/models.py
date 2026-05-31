@@ -83,6 +83,7 @@ class PatientInfo(models.Model):
 
     # outcomes / follow-up
     death_date = models.DateField(null=True)
+    mrd_status = models.TextField(null=True)
 
     # treatment
     prior_therapy = models.TextField(null=True)

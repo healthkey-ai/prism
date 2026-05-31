@@ -25,6 +25,7 @@ export interface CohortFilters {
   plasma_cell_leukemia?: boolean
   diagnosis_year_min?: number
   diagnosis_year_max?: number
+  mrd_status?: string[]
   smoking_status?: string[]
   hemoglobin_min?: number
   hemoglobin_max?: number
@@ -47,6 +48,7 @@ export interface FormSettings {
   refractory_statuses: string[]
   regions: string[]
   ethnicity_options: string[]
+  mrd_status_options: string[]
   ecog_values: number[]
   smoking_options: string[]
   therapy_line_options: number[]

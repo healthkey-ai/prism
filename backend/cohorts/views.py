@@ -147,4 +147,5 @@ def form_settings(request):
         "ecog_values": [0, 1, 2, 3],
         "smoking_options": ["Never", "Former", "Current"],
         "therapy_line_options": [1, 2, 3, 4],
+        "mrd_status_options": ["MRD Negative", "MRD Positive", "Not Assessed"],
     })

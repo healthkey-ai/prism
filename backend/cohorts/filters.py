@@ -193,6 +193,11 @@ def apply_cohort_filters(request) -> "QuerySet[PatientInfo]":
     if dx_year_max is not None:
         qs = qs.filter(diagnosis_date__year__lte=dx_year_max)
 
+    # ── MRD status ────────────────────────────────────────────────────────────
+    mrd = _list("mrd_status")
+    if mrd:
+        qs = qs.filter(mrd_status__in=mrd)
+
     # ── lifestyle ─────────────────────────────────────────────────────────────
     smoking = _list("smoking_status")
     if smoking:

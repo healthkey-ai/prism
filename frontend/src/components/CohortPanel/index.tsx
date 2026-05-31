@@ -155,10 +155,6 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
             <p className="text-xs text-slate-400 mb-1">Ethnicity</p>
             <MultiSelect options={settings?.ethnicity_options ?? []} selected={sel('ethnicity')} onChange={upd('ethnicity')} />
           </div>
-          <div>
-            <p className="text-xs text-slate-400 mb-1">Region (State)</p>
-            <MultiSelect options={settings?.regions ?? []} selected={sel('region')} onChange={upd('region')} />
-          </div>
         </Section>
 
         <Section title="Performance Status" defaultOpen={false}>
@@ -270,6 +266,14 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
 
         {isMM && (
           <Section title="MM Characteristics" defaultOpen={false}>
+            <div>
+              <p className="text-xs text-slate-400 mb-1">MRD Status</p>
+              <MultiSelect
+                options={settings?.mrd_status_options ?? ['MRD Negative', 'MRD Positive', 'Not Assessed']}
+                selected={sel('mrd_status')}
+                onChange={upd('mrd_status')}
+              />
+            </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={filters.meets_crab === true}
                 onChange={e => onUpdate('meets_crab', e.target.checked ? true : undefined)}
@@ -307,10 +311,6 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
               className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500" />
           </div>
           <RangeInputs label="β2-Microglobulin (mg/L)" minKey="b2m_min" maxKey="b2m_max" filters={filters} onUpdate={onUpdate} step={0.5} />
-        </Section>
-
-        <Section title="Diagnosis Year" defaultOpen={false}>
-          <RangeInputs label="Year range" minKey="diagnosis_year_min" maxKey="diagnosis_year_max" filters={filters} onUpdate={onUpdate} />
         </Section>
 
         <Section title="Lifestyle" defaultOpen={false}>
