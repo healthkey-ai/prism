@@ -55,6 +55,7 @@ DATABASES = {
         env="DATABASE_URL",
         conn_max_age=600,
         ssl_require=not DEBUG,
+        conn_health_checks=True,
     )
 }
 
@@ -103,7 +104,7 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"anon": "20/min"},
+    "DEFAULT_THROTTLE_RATES": {"anon": "20/min", "cohort_export": "10/hour"},
 }
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG

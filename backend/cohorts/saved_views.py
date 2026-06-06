@@ -3,15 +3,24 @@ import io
 import re
 
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework import status
 
 from patients.models import PatientInfo
 from .filters import apply_cohort_filters
 from .models import SavedCohort
 
+
+class ExportRateThrottle(UserRateThrottle):
+    rate = "10/hour"
+    scope = "cohort_export"
+
+
+COHORT_MAX_PER_USER = 10
+FILTER_LIST_MAX_VALUES = 10
 
 # Explicit allowlist of exportable fields — add new fields here intentionally.
 # PII fields (email, DOB, postal_code, etc.) are never included.
@@ -135,6 +144,16 @@ def _csv_stream(qs):
         yield buf.getvalue()
 
 
+def _validate_filter_cardinality(filters: dict) -> str | None:
+    """Return an error message if any list-valued filter exceeds the max cardinality."""
+    for key, val in filters.items():
+        if isinstance(val, list) and len(val) > FILTER_LIST_MAX_VALUES:
+            return (
+                f"Filter '{key}' has {len(val)} values; maximum is {FILTER_LIST_MAX_VALUES}."
+            )
+    return None
+
+
 def _safe_filename(name: str) -> str:
     """Strip characters that could break Content-Disposition headers."""
     cleaned = re.sub(r"[^\w\-. ]", "_", name).replace(" ", "_")[:64]
@@ -150,12 +169,20 @@ def saved_cohort_list(request):
         return Response(data)
 
     # POST — create
+    if SavedCohort.objects.filter(user=request.user).count() >= COHORT_MAX_PER_USER:
+        return Response(
+            {"detail": f"Cohort limit reached ({COHORT_MAX_PER_USER} max). Delete an existing cohort to save a new one."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     name = request.data.get("name", "").strip()
     if not name:
         return Response({"detail": "name is required."}, status=status.HTTP_400_BAD_REQUEST)
     filters = request.data.get("filters")
     if not isinstance(filters, dict):
         return Response({"detail": "filters must be a JSON object."}, status=status.HTTP_400_BAD_REQUEST)
+    error = _validate_filter_cardinality(filters)
+    if error:
+        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
     cohort = SavedCohort.objects.create(
         user=request.user,
         name=name,
@@ -187,6 +214,9 @@ def saved_cohort_detail(request, pk):
         if "filters" in request.data:
             if not isinstance(request.data["filters"], dict):
                 return Response({"detail": "filters must be a JSON object."}, status=status.HTTP_400_BAD_REQUEST)
+            error = _validate_filter_cardinality(request.data["filters"])
+            if error:
+                return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
             cohort.filters = request.data["filters"]
         cohort.save()
         return Response(_cohort_data(cohort))
@@ -198,6 +228,7 @@ def saved_cohort_detail(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([ExportRateThrottle])
 def saved_cohort_export(request, pk):
     try:
         cohort = SavedCohort.objects.get(pk=pk, user=request.user)
