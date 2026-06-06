@@ -77,6 +77,4 @@ export async function deleteSavedCohort(id: number): Promise<void> {
   await api.delete(`/cohorts/saved/${id}/`)
 }
 
-export function exportCohortUrl(id: number, format: 'csv' | 'json'): string {
-  return `/api/cohorts/saved/${id}/export/?format=${format}`
-}
+export default api

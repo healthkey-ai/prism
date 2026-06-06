@@ -354,7 +354,7 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
       {showSaveModal && (
         <SaveCohortModal
           filters={filters}
-          onSaved={() => { setShowSaveModal(false); setSavedRefresh(r => r + 1) }}
+          onSaved={(cohort) => { setShowSaveModal(false); setSavedRefresh(r => r + 1); onLoadCohort(cohort.filters, cohort.id) }}
           onClose={() => setShowSaveModal(false)}
         />
       )}

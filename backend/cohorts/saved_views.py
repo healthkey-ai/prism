@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 
 from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view, permission_classes
@@ -23,6 +24,8 @@ EXPORT_FIELDS = [
     f.name for f in PatientInfo._meta.get_fields()
     if hasattr(f, "column") and f.name not in PII_FIELDS
 ]
+
+MAX_EXPORT_ROWS = 50_000
 
 
 class _FakeRequest:
@@ -68,7 +71,7 @@ class _DictQueryParams:
 
 def _serialize_qs(qs):
     rows = []
-    for obj in qs.values(*EXPORT_FIELDS):
+    for obj in qs.values(*EXPORT_FIELDS).iterator(chunk_size=2000):
         row = {}
         for k, v in obj.items():
             if hasattr(v, "isoformat"):
@@ -77,6 +80,11 @@ def _serialize_qs(qs):
                 row[k] = v
         rows.append(row)
     return rows
+
+
+def _safe_filename(name: str) -> str:
+    """Strip characters that could break Content-Disposition headers."""
+    return re.sub(r"[^\w\-. ]", "_", name).replace(" ", "_")[:64]
 
 
 @api_view(["GET", "POST"])
@@ -140,22 +148,21 @@ def saved_cohort_export(request, pk):
     fake_req = _FakeRequest(cohort.filters)
     qs = apply_cohort_filters(fake_req)
     fmt = request.query_params.get("format", "csv")
+    safe_name = _safe_filename(cohort.name)
 
     if fmt == "json":
-        rows = _serialize_qs(qs)
+        rows = _serialize_qs(qs[:MAX_EXPORT_ROWS])
         return JsonResponse(rows, safe=False)
 
     # CSV
-    rows = _serialize_qs(qs)
+    rows = _serialize_qs(qs[:MAX_EXPORT_ROWS])
     buf = io.StringIO()
     if rows:
         writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
-    else:
-        buf.write("")
 
-    filename = f"cohort-{cohort.name.replace(' ', '_')}.csv"
+    filename = f"cohort-{safe_name}.csv"
     response = HttpResponse(buf.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response

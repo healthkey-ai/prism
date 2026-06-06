@@ -10,27 +10,33 @@ interface Props {
 export default function SavedCohortsList({ onLoad, refreshToken }: Props) {
   const [cohorts, setCohorts] = useState<SavedCohort[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     fetchSavedCohorts()
       .then(setCohorts)
-      .catch(() => setCohorts([]))
+      .catch((err) => {
+        setError(err?.response?.status === 401 ? 'Session expired. Please log in again.' : 'Failed to load saved cohorts.')
+        setCohorts([])
+      })
       .finally(() => setLoading(false))
   }, [refreshToken])
 
   async function handleDelete(id: number) {
-    await deleteSavedCohort(id)
-    setCohorts(prev => prev.filter(c => c.id !== id))
+    if (!window.confirm('Delete this saved cohort? This cannot be undone.')) return
+    try {
+      await deleteSavedCohort(id)
+      setCohorts(prev => prev.filter(c => c.id !== id))
+    } catch {
+      alert('Failed to delete cohort. Please try again.')
+    }
   }
 
-  if (loading) {
-    return <p className="text-xs text-slate-500 italic py-2">Loading…</p>
-  }
-
-  if (cohorts.length === 0) {
-    return <p className="text-xs text-slate-500 italic py-2">No saved cohorts yet.</p>
-  }
+  if (loading) return <p className="text-xs text-slate-500 italic py-2">Loading…</p>
+  if (error) return <p className="text-xs text-red-400 py-2">{error}</p>
+  if (cohorts.length === 0) return <p className="text-xs text-slate-500 italic py-2">No saved cohorts yet.</p>
 
   return (
     <div className="space-y-1.5">

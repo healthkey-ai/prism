@@ -2,13 +2,23 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
-DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
+# Fail loudly if SECRET_KEY is missing or is the dev placeholder in production
+_SECRET_KEY = os.environ.get("SECRET_KEY", "")
+DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
+
+if not _SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured("SECRET_KEY environment variable is required in production.")
+    _SECRET_KEY = "dev-secret-key-only-for-local-do-not-use-in-production"
+
+SECRET_KEY = _SECRET_KEY
+
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com").split(",")
 
 INSTALLED_APPS = [
@@ -30,6 +40,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 ]
@@ -41,7 +52,7 @@ DATABASES = {
     "default": dj_database_url.config(
         env="DATABASE_URL",
         conn_max_age=600,
-        ssl_require=True,
+        ssl_require=not DEBUG,
     )
 }
 
@@ -54,6 +65,8 @@ SESSION_COOKIE_DOMAIN = os.environ.get("SESSION_COOKIE_DOMAIN")  # set to .healt
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_HTTPONLY = True
+# CSRF cookie must be readable by JS so the frontend can send X-CSRFToken
+CSRF_COOKIE_HTTPONLY = False
 
 CORS_ALLOW_CREDENTIALS = True
 

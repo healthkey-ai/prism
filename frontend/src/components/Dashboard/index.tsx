@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { MetricsResponse, User } from '../../types'
 import MetricCard from '../ui/MetricCard'
 import ResponseRates from '../charts/ResponseRates'
@@ -10,7 +10,7 @@ import LabsPanel from '../charts/LabsPanel'
 import TreatmentDuration from '../charts/TreatmentDuration'
 import Sequences from '../charts/Sequences'
 import SurvivalCurves from '../charts/SurvivalCurves'
-import { exportCohortUrl } from '../../api/client'
+import api from '../../api/client'
 
 interface Props {
   metrics: MetricsResponse | null
@@ -49,7 +49,20 @@ function NoDataPlaceholder() {
 export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId }: Props) {
   const [tab, setTab]                 = useState<DashboardTab>('outcomes')
   const [responseTab, setResponseTab] = useState<ResponseLineTab>('1L')
-  const [showExportMenu, setShowExportMenu]   = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close export dropdown on outside click
+  useEffect(() => {
+    if (!showExportMenu) return
+    function close(e: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [showExportMenu])
 
   const cohortCount = metrics?.cohort?.count ?? 0
   const isEmpty     = !loading && metrics !== null && cohortCount === 0
@@ -64,13 +77,28 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
     { id: 'profile',  label: 'Patient Profile' },
   ]
 
-  function handleExport(format: 'csv' | 'json') {
+  async function handleExport(format: 'csv' | 'json') {
     setShowExportMenu(false)
     if (!activeSavedCohortId) {
       alert('Save your current cohort first (use the "Save" button in the left panel), then export.')
       return
     }
-    window.location.href = exportCohortUrl(activeSavedCohortId, format)
+    try {
+      const resp = await api.get(
+        `/cohorts/saved/${activeSavedCohortId}/export/?format=${format}`,
+        { responseType: 'blob' }
+      )
+      const url = URL.createObjectURL(new Blob([resp.data]))
+      const a = document.createElement('a')
+      const disposition = resp.headers['content-disposition'] ?? ''
+      const match = disposition.match(/filename="([^"]+)"/)
+      a.href = url
+      a.download = match ? match[1] : `cohort.${format}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Export failed. Please try again.')
+    }
   }
 
   return (
@@ -89,7 +117,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
         </div>
         <div className="flex items-center gap-3">
           {/* Export dropdown */}
-          <div className="relative">
+          <div className="relative" ref={exportMenuRef}>
             <button
               onClick={() => setShowExportMenu(v => !v)}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
@@ -151,16 +179,10 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           </div>
         ) : tab === 'outcomes' ? (
           <>
-            {/* Survival curves */}
             <MetricCard title="Progression-Free Survival">
-              {metrics?.survival ? (
-                <SurvivalCurves data={metrics.survival} />
-              ) : (
-                <NoDataPlaceholder />
-              )}
+              {metrics?.survival ? <SurvivalCurves data={metrics.survival} /> : <NoDataPlaceholder />}
             </MetricCard>
 
-            {/* Response Rates */}
             <MetricCard title="Response Rates">
               <div className="flex gap-1 rounded-lg border border-gray-200 p-0.5 bg-gray-50 w-fit mb-4">
                 {(['1L', '2L', '3L+'] as ResponseLineTab[]).map((t) => (
@@ -168,9 +190,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                     key={t}
                     onClick={() => setResponseTab(t)}
                     className={`px-4 py-1.5 text-xs rounded-md font-semibold transition-colors ${
-                      responseTab === t
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
+                      responseTab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {t === '1L' ? '1st Line' : t === '2L' ? '2nd Line' : '3rd Line+'}
@@ -187,7 +207,6 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               />
             </MetricCard>
 
-            {/* Treatment Patterns + Lines */}
             <div className="grid grid-cols-2 gap-6">
               <MetricCard title="1st Line Treatment Patterns">
                 <TreatmentPatterns data={metrics?.treatment_patterns?.first_line ?? []} title="" />
@@ -200,14 +219,9 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               </MetricCard>
             </div>
 
-            {/* Treatment Duration + Sequences */}
             <div className="grid grid-cols-2 gap-6">
               <MetricCard title="Treatment Duration">
-                {metrics?.treatment_duration ? (
-                  <TreatmentDuration data={metrics.treatment_duration} />
-                ) : (
-                  <NoDataPlaceholder />
-                )}
+                {metrics?.treatment_duration ? <TreatmentDuration data={metrics.treatment_duration} /> : <NoDataPlaceholder />}
               </MetricCard>
               <MetricCard title="Top Treatment Sequences">
                 <Sequences sequences={metrics?.treatment_patterns?.sequences ?? []} />
@@ -216,31 +230,16 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           </>
         ) : (
           <>
-            {/* Demographics */}
             <MetricCard title="Patient Demographics">
-              {metrics?.demographics ? (
-                <Demographics data={metrics.demographics} />
-              ) : (
-                <NoDataPlaceholder />
-              )}
+              {metrics?.demographics ? <Demographics data={metrics.demographics} /> : <NoDataPlaceholder />}
             </MetricCard>
 
-            {/* Staging */}
             <MetricCard title="Disease Staging &amp; Characteristics">
-              {metrics?.staging ? (
-                <StagingPanel data={metrics.staging} />
-              ) : (
-                <NoDataPlaceholder />
-              )}
+              {metrics?.staging ? <StagingPanel data={metrics.staging} /> : <NoDataPlaceholder />}
             </MetricCard>
 
-            {/* Labs */}
             <MetricCard title="Laboratory Values at Baseline">
-              {metrics?.labs ? (
-                <LabsPanel data={metrics.labs} />
-              ) : (
-                <NoDataPlaceholder />
-              )}
+              {metrics?.labs ? <LabsPanel data={metrics.labs} /> : <NoDataPlaceholder />}
             </MetricCard>
           </>
         )}
