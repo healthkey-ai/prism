@@ -50,11 +50,14 @@ MIDDLEWARE = [
 ROOT_URLCONF = "analytics_project.urls"
 WSGI_APPLICATION = "analytics_project.wsgi.application"
 
+_db_url = os.environ.get("DATABASE_URL", "")
+_ssl_require = bool(_db_url) and "localhost" not in _db_url and "127.0.0.1" not in _db_url
+
 DATABASES = {
     "default": dj_database_url.config(
         env="DATABASE_URL",
         conn_max_age=600,
-        ssl_require=not DEBUG,
+        ssl_require=_ssl_require,
         conn_health_checks=True,
     )
 }
