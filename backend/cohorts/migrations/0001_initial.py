@@ -8,6 +8,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ("accounts", "0001_create_identity_table"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
