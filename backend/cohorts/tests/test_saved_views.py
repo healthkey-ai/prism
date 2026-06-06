@@ -212,3 +212,70 @@ class TestSavedCohortExport:
     def test_export_unauthenticated_returns_403(self, api_client, cohort):
         resp = api_client.get(export_url(cohort.pk, "csv"))
         assert resp.status_code == 403
+
+
+# ── Filter cardinality ────────────────────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestFilterCardinality:
+    def test_create_with_list_at_limit_returns_201(self, api_client, user, db):
+        api_client.force_authenticate(user=user)
+        filters = {"stage": ["I", "II", "III", "IV", "A", "B", "C", "D", "E", "F"]}  # 10
+        resp = api_client.post(SAVED_URL, {"name": "OK", "filters": filters}, format="json")
+        assert resp.status_code == 201
+
+    def test_create_with_list_exceeding_limit_returns_400(self, api_client, user, db):
+        api_client.force_authenticate(user=user)
+        filters = {"stage": ["I", "II", "III", "IV", "A", "B", "C", "D", "E", "F", "G"]}  # 11
+        resp = api_client.post(SAVED_URL, {"name": "Too many", "filters": filters}, format="json")
+        assert resp.status_code == 400
+        assert "stage" in resp.data["detail"]
+
+    def test_update_with_list_exceeding_limit_returns_400(self, api_client, user, cohort):
+        api_client.force_authenticate(user=user)
+        resp = api_client.put(detail_url(cohort.pk), {"filters": {"stage": ["a"] * 11}}, format="json")
+        assert resp.status_code == 400
+
+    def test_update_with_list_at_limit_returns_200(self, api_client, user, cohort):
+        api_client.force_authenticate(user=user)
+        resp = api_client.put(detail_url(cohort.pk), {"filters": {"stage": ["a"] * 10}}, format="json")
+        assert resp.status_code == 200
+
+
+# ── Cohort cap ────────────────────────────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestCohortCap:
+    def test_eleventh_cohort_is_rejected(self, api_client, user, db):
+        for i in range(10):
+            SavedCohort.objects.create(user=user, name=f"Cohort {i}", filters={})
+        api_client.force_authenticate(user=user)
+        resp = api_client.post(SAVED_URL, {"name": "One too many", "filters": {}}, format="json")
+        assert resp.status_code == 400
+        assert "limit" in resp.data["detail"].lower()
+
+    def test_tenth_cohort_succeeds(self, api_client, user, db):
+        for i in range(9):
+            SavedCohort.objects.create(user=user, name=f"Cohort {i}", filters={})
+        api_client.force_authenticate(user=user)
+        resp = api_client.post(SAVED_URL, {"name": "Tenth", "filters": {"disease": "MM"}}, format="json")
+        assert resp.status_code == 201
+
+    def test_cap_is_per_user(self, api_client, user, other_user, db):
+        for i in range(10):
+            SavedCohort.objects.create(user=other_user, name=f"Cohort {i}", filters={})
+        api_client.force_authenticate(user=user)
+        resp = api_client.post(SAVED_URL, {"name": "My first", "filters": {}}, format="json")
+        assert resp.status_code == 201
+
+
+# ── Export throttle ───────────────────────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestExportThrottle:
+    def test_throttled_export_returns_429(self, api_client, user, cohort):
+        api_client.force_authenticate(user=user)
+        with patch("cohorts.saved_views.ExportRateThrottle.allow_request", return_value=False), \
+             patch("cohorts.saved_views.ExportRateThrottle.wait", return_value=3600):
+            resp = api_client.get(export_url(cohort.pk, "csv"))
+        assert resp.status_code == 429
