@@ -10,6 +10,7 @@ export default function App() {
   const auth = useAuth()
   const { filters, settings, metrics, loading, updateFilter, clearFilters, setFilters } = useAnalytics()
   const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
+  const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
 
   if (auth.loading) {
     return (
@@ -23,9 +24,22 @@ export default function App() {
     return <LoginPage auth={auth} />
   }
 
-  function handleLoadCohort(f: CohortFilters, cohortId?: number) {
+  function handleLoadCohort(f: CohortFilters, cohortId?: number, cohortName?: string) {
     setFilters(f)
     setActiveSavedCohortId(cohortId ?? null)
+    setActiveCohortName(cohortName ?? null)
+  }
+
+  function handleUpdateFilter<K extends keyof CohortFilters>(key: K, val: CohortFilters[K]) {
+    setActiveCohortName(null)
+    setActiveSavedCohortId(null)
+    updateFilter(key, val)
+  }
+
+  function handleClearFilters() {
+    setActiveCohortName(null)
+    setActiveSavedCohortId(null)
+    clearFilters()
   }
 
   return (
@@ -33,10 +47,11 @@ export default function App() {
       <CohortPanel
         filters={filters}
         settings={settings}
-        onUpdate={updateFilter}
-        onClear={clearFilters}
+        onUpdate={handleUpdateFilter}
+        onClear={handleClearFilters}
         cohortCount={metrics?.cohort.count ?? 0}
         onLoadCohort={handleLoadCohort}
+        activeCohortName={activeCohortName}
       />
       <main className="flex-1 overflow-y-auto">
         <Dashboard

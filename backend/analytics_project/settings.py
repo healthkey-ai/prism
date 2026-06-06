@@ -79,6 +79,11 @@ CORS_ALLOW_CREDENTIALS = True
 if not DEBUG:
     CSRF_COOKIE_SECURE = True
 
+_extra_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+CSRF_TRUSTED_ORIGINS = [o for o in _extra_csrf.split(",") if o]
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += ["http://localhost:5173", "http://127.0.0.1:5173"]
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_TZ = True

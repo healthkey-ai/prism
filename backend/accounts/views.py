@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.middleware.csrf import get_token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -18,6 +19,7 @@ def login_view(request):
     if user is None:
         return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
     login(request, user)
+    get_token(request)  # ensure CSRF cookie is set on the response
     return Response(_user_data(user))
 
 
@@ -48,12 +50,14 @@ def signup_view(request):
 
     user = Identity.objects.create_user(email=email, password=password, name=name)
     login(request, user, backend="accounts.backends.EmailBackend")
+    get_token(request)  # ensure CSRF cookie is set on the response
     return Response(_user_data(user), status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me_view(request):
+    get_token(request)  # ensure CSRF cookie is issued/refreshed on every page load
     return Response(_user_data(request.user))
 
 

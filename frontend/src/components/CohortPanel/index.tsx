@@ -9,7 +9,8 @@ interface Props {
   onUpdate: <K extends keyof CohortFilters>(key: K, val: CohortFilters[K]) => void
   onClear: () => void
   cohortCount: number
-  onLoadCohort: (filters: CohortFilters, cohortId?: number) => void
+  onLoadCohort: (filters: CohortFilters, cohortId?: number, cohortName?: string) => void
+  activeCohortName: string | null
 }
 
 function Section({ title, children, defaultOpen = true }: {
@@ -86,7 +87,7 @@ function RangeInputs({ label, minKey, maxKey, filters, onUpdate, step = 1 }: {
   )
 }
 
-export default function CohortPanel({ filters, settings, onUpdate, onClear, cohortCount, onLoadCohort }: Props) {
+export default function CohortPanel({ filters, settings, onUpdate, onClear, cohortCount, onLoadCohort, activeCohortName }: Props) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [savedRefresh, setSavedRefresh] = useState(0)
 
@@ -103,6 +104,15 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
         <h2 className="text-base font-bold text-white">Cohort Builder</h2>
         <p className="text-xs text-slate-400 mt-0.5">Filter patients below</p>
       </div>
+
+      {/* Active cohort indicator */}
+      {activeCohortName && (
+        <div className="px-4 py-2 bg-teal-900/40 border-b border-teal-700/50 flex items-center gap-2">
+          <span className="text-xs text-teal-400 font-medium truncate">
+            Active: {activeCohortName}
+          </span>
+        </div>
+      )}
 
       {/* Cohort badge + save button */}
       <div className="px-4 py-3 bg-slate-900/50 border-b border-slate-700 flex items-center justify-between gap-2">
@@ -125,7 +135,7 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
       <div className="flex-1 overflow-y-auto">
 
         <Section title="Saved Cohorts" defaultOpen={false}>
-          <SavedCohortsList onLoad={(f, id) => onLoadCohort(f, id)} refreshToken={savedRefresh} />
+          <SavedCohortsList onLoad={(f, id, name) => onLoadCohort(f, id, name)} refreshToken={savedRefresh} />
         </Section>
 
         <Section title="Disease">
@@ -354,7 +364,7 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
       {showSaveModal && (
         <SaveCohortModal
           filters={filters}
-          onSaved={(cohort) => { setShowSaveModal(false); setSavedRefresh(r => r + 1); onLoadCohort(cohort.filters, cohort.id) }}
+          onSaved={(cohort) => { setShowSaveModal(false); setSavedRefresh(r => r + 1); onLoadCohort(cohort.filters, cohort.id, cohort.name) }}
           onClose={() => setShowSaveModal(false)}
         />
       )}

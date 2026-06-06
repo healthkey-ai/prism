@@ -6,7 +6,7 @@ is a no-op in that case (CREATE TABLE IF NOT EXISTS). In standalone/dev
 environments where ctomop hasn't run yet, it creates the table so analytics
 can work independently.
 """
-from django.db import migrations
+from django.db import migrations, models
 
 
 CREATE_IDENTITY = """
@@ -59,4 +59,47 @@ class Migration(migrations.Migration):
         migrations.RunSQL(CREATE_IDENTITY, reverse_sql="DROP TABLE IF EXISTS identity CASCADE;"),
         migrations.RunSQL(CREATE_IDENTITY_GROUPS, reverse_sql="DROP TABLE IF EXISTS accounts_identity_groups;"),
         migrations.RunSQL(CREATE_IDENTITY_USER_PERMISSIONS, reverse_sql="DROP TABLE IF EXISTS accounts_identity_user_permissions;"),
+        # Register the unmanaged Identity model in Django's migration state so that
+        # lazy FK references (e.g. cohorts.SavedCohort.user) can be resolved.
+        # No SQL runs; the table is created above (or already exists via ctomop).
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.CreateModel(
+                    name="Identity",
+                    fields=[
+                        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                        ("password", models.CharField(max_length=128, verbose_name="password")),
+                        ("last_login", models.DateTimeField(blank=True, null=True, verbose_name="last login")),
+                        ("is_superuser", models.BooleanField(default=False)),
+                        ("issuer", models.CharField(max_length=255)),
+                        ("sub", models.CharField(max_length=255)),
+                        ("uid", models.CharField(max_length=512, unique=True)),
+                        ("email", models.EmailField(max_length=254)),
+                        ("name", models.CharField(blank=True, max_length=255)),
+                        ("is_active", models.BooleanField(default=True)),
+                        ("is_staff", models.BooleanField(default=False)),
+                        ("created_at", models.DateTimeField(auto_now_add=True)),
+                        ("groups", models.ManyToManyField(
+                            blank=True,
+                            related_name="user_set",
+                            related_query_name="user",
+                            to="auth.group",
+                            verbose_name="groups",
+                        )),
+                        ("user_permissions", models.ManyToManyField(
+                            blank=True,
+                            related_name="user_set",
+                            related_query_name="user",
+                            to="auth.permission",
+                            verbose_name="user permissions",
+                        )),
+                    ],
+                    options={
+                        "db_table": "identity",
+                        "managed": False,
+                    },
+                ),
+            ],
+        ),
     ]
