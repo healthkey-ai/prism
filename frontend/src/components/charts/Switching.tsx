@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { MetricsResponse } from '../../types'
 
 interface Props {
-  data: MetricsResponse['switching']
+  data: NonNullable<MetricsResponse['switching']>
 }
 
 const COLORS = [

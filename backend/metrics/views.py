@@ -13,6 +13,7 @@ from metrics.services import (
     survival,
     ttnt,
     switching,
+    subgroup_survival,
 )
 
 
@@ -36,4 +37,5 @@ def metrics(request):
         "survival":            survival.compute(qs),
         "ttnt":                ttnt.compute(qs),
         "switching":           switching.compute(qs),
+        "subgroup_survival":   subgroup_survival.compute(qs),
     })

@@ -9,8 +9,10 @@ import {
 } from 'recharts'
 import type { MetricsResponse } from '../../types'
 
+type TTNTData = NonNullable<MetricsResponse['ttnt']>
+
 interface Props {
-  data: MetricsResponse['ttnt']
+  data: TTNTData
 }
 
 const LINE_CONFIG = [
@@ -18,7 +20,7 @@ const LINE_CONFIG = [
   { key: 'line_2_to_3', label: '2L → 3L', color: '#7c3aed' },
 ] as const
 
-function mergeKMCurves(data: MetricsResponse['ttnt']) {
+function mergeKMCurves(data: TTNTData) {
   const allTimes = [
     ...new Set(
       LINE_CONFIG.flatMap(({ key }) => data[key].curve.map((p) => p.time))

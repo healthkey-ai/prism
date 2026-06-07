@@ -3,7 +3,7 @@ from metrics.services.km_utils import km_curve as _km_curve, km_median as _media
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 
-def _os_km(qs):
+def os_km(qs):
     """
     OS: from 1st-line start to death_date.
     Censored at last_treatment if still alive.
@@ -29,7 +29,7 @@ def _os_km(qs):
 
 # ── PFS ───────────────────────────────────────────────────────────────────────
 
-def _pfs_km(qs):
+def pfs_km(qs):
     """
     PFS: from 1st-line start to first documented Progressive Disease across any
     therapy line, or death — whichever comes first.
@@ -78,7 +78,7 @@ def _pfs_km(qs):
 
 # ── EFS ───────────────────────────────────────────────────────────────────────
 
-def _efs_km(qs):
+def efs_km(qs):
     """
     EFS: from 1st-line start to the earliest of:
       - Start of 2nd-line therapy (treatment change = event)
@@ -127,7 +127,7 @@ def _efs_km(qs):
 
 def compute(qs):
     return {
-        "os":  _os_km(qs),
-        "pfs": _pfs_km(qs),
-        "efs": _efs_km(qs),
+        "os":  os_km(qs),
+        "pfs": pfs_km(qs),
+        "efs": efs_km(qs),
     }
