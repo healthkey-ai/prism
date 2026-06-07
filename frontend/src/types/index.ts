@@ -157,13 +157,18 @@ export interface MetricsResponse {
     pfs: SurvivalLine
     efs: SurvivalLine
   }
-  ttnt: {
+  ttnt?: {
     line_1_to_2: SurvivalLine
     line_2_to_3: SurvivalLine
   }
-  switching: {
+  switching?: {
     from_1l: SwitchingRow[]
     from_2l: SwitchingRow[]
+  }
+  subgroup_survival?: {
+    by_stage:        SubgroupStratification
+    by_cytogenetics: SubgroupStratification
+    by_sct:          SubgroupStratification
   }
 }
 
@@ -171,6 +176,15 @@ export interface SurvivalLine {
   curve: { time: number; survival: number; at_risk: number }[]
   n: number
   median: number | null
+}
+
+export interface SubgroupSurvivalLine extends SurvivalLine {
+  label: string
+}
+
+export interface SubgroupStratification {
+  os:  SubgroupSurvivalLine[]
+  pfs: SubgroupSurvivalLine[]
 }
 
 export interface SwitchingRow {

@@ -8,33 +8,18 @@ import {
   ReferenceLine,
 } from 'recharts'
 import type { MetricsResponse } from '../../types'
+import { mergeKMCurves } from '../../utils/kmChartUtils'
+
+type TTNTData = NonNullable<MetricsResponse['ttnt']>
 
 interface Props {
-  data: MetricsResponse['ttnt']
+  data: TTNTData
 }
 
 const LINE_CONFIG = [
   { key: 'line_1_to_2', label: '1L → 2L', color: '#0d9488' },
   { key: 'line_2_to_3', label: '2L → 3L', color: '#7c3aed' },
 ] as const
-
-function mergeKMCurves(data: MetricsResponse['ttnt']) {
-  const allTimes = [
-    ...new Set(
-      LINE_CONFIG.flatMap(({ key }) => data[key].curve.map((p) => p.time))
-    ),
-  ].sort((a, b) => a - b)
-
-  return allTimes.map((time) => {
-    const point: Record<string, number> = { time }
-    LINE_CONFIG.forEach(({ key }) => {
-      const curve = data[key].curve
-      const last  = [...curve].reverse().find((p) => p.time <= time)
-      point[key]  = last ? last.survival : 1.0
-    })
-    return point
-  })
-}
 
 export default function TTNT({ data }: Props) {
   if (!data) return null
@@ -48,7 +33,7 @@ export default function TTNT({ data }: Props) {
     )
   }
 
-  const chartData = mergeKMCurves(data)
+  const chartData = mergeKMCurves(LINE_CONFIG.map(({ key }) => ({ key, curve: data[key].curve })))
 
   return (
     <div>
@@ -104,7 +89,6 @@ export default function TTNT({ data }: Props) {
                 stroke={color}
                 strokeWidth={2}
                 dot={false}
-                connectNulls
               />
             ) : null
           )}

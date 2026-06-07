@@ -1,57 +1,9 @@
-from collections import defaultdict
-
-
-def _km_curve(times_events):
-    """
-    Kaplan-Meier estimator.
-    times_events: list of (duration_months, event) where event=True means the endpoint occurred.
-    Returns list of {time, survival, at_risk} step points.
-    """
-    if not times_events:
-        return []
-
-    buckets = defaultdict(lambda: {"d": 0, "c": 0})
-    for t, event in times_events:
-        if event:
-            buckets[t]["d"] += 1
-        else:
-            buckets[t]["c"] += 1
-
-    n        = len(times_events)
-    at_risk  = n
-    survival = 1.0
-    result   = [{"time": 0.0, "survival": 1.0, "at_risk": n}]
-
-    for t in sorted(buckets):
-        d = buckets[t]["d"]
-        c = buckets[t]["c"]
-        if d > 0:
-            survival *= 1 - d / at_risk
-            result.append({
-                "time":     round(t, 1),
-                "survival": round(survival, 4),
-                "at_risk":  at_risk - d,
-            })
-        at_risk -= d + c
-
-    return result
-
-
-def _median(curve):
-    for pt in curve:
-        if pt["survival"] <= 0.5:
-            return pt["time"]
-    return None
-
-
-def _km_result(times_events):
-    curve = _km_curve(times_events)
-    return {"curve": curve, "n": len(times_events), "median": _median(curve)}
+from metrics.services.km_utils import km_curve as _km_curve, km_median as _median, km_result as _km_result
 
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 
-def _os_km(qs):
+def os_km(qs):
     """
     OS: from 1st-line start to death_date.
     Censored at last_treatment if still alive.
@@ -77,7 +29,7 @@ def _os_km(qs):
 
 # ── PFS ───────────────────────────────────────────────────────────────────────
 
-def _pfs_km(qs):
+def pfs_km(qs):
     """
     PFS: from 1st-line start to first documented Progressive Disease across any
     therapy line, or death — whichever comes first.
@@ -126,7 +78,7 @@ def _pfs_km(qs):
 
 # ── EFS ───────────────────────────────────────────────────────────────────────
 
-def _efs_km(qs):
+def efs_km(qs):
     """
     EFS: from 1st-line start to the earliest of:
       - Start of 2nd-line therapy (treatment change = event)
@@ -175,7 +127,7 @@ def _efs_km(qs):
 
 def compute(qs):
     return {
-        "os":  _os_km(qs),
-        "pfs": _pfs_km(qs),
-        "efs": _efs_km(qs),
+        "os":  os_km(qs),
+        "pfs": pfs_km(qs),
+        "efs": efs_km(qs),
     }

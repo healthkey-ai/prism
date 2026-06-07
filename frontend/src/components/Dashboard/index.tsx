@@ -12,6 +12,7 @@ import Sequences from '../charts/Sequences'
 import SurvivalCurves from '../charts/SurvivalCurves'
 import TTNT from '../charts/TTNT'
 import Switching from '../charts/Switching'
+import SubgroupSurvival from '../charts/SubgroupSurvival'
 import api from '../../api/client'
 
 interface Props {
@@ -185,6 +186,12 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           <>
             <MetricCard title="Progression-Free Survival">
               {metrics?.survival ? <SurvivalCurves data={metrics.survival} /> : <NoDataPlaceholder />}
+            </MetricCard>
+
+            <MetricCard title="Survival by Subgroup">
+              {metrics?.subgroup_survival
+                ? <SubgroupSurvival data={metrics.subgroup_survival} />
+                : <NoDataPlaceholder />}
             </MetricCard>
 
             <MetricCard title="Response Rates">
