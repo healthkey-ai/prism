@@ -10,7 +10,10 @@ interface Props {
 function survivalAt(
   curve: SubgroupSurvivalLine['curve'],
   t: number
-): number {
+): number | null {
+  if (!curve.length) return null
+  const maxTime = curve[curve.length - 1].time
+  if (maxTime < t) return null  // insufficient follow-up
   const last = [...curve].reverse().find((p) => p.time <= t)
   return last ? last.survival : 1.0
 }
@@ -46,11 +49,14 @@ export default function LandmarkTable({ lines, landmarks = [6, 12, 24, 36] }: Pr
                 </span>
               </td>
               <td className="text-right py-1.5 px-2 text-gray-600">{line.n}</td>
-              {landmarks.map((t) => (
-                <td key={t} className="text-right py-1.5 px-2 text-gray-700">
-                  {(survivalAt(line.curve, t) * 100).toFixed(1)}%
-                </td>
-              ))}
+              {landmarks.map((t) => {
+                const s = survivalAt(line.curve, t)
+                return (
+                  <td key={t} className="text-right py-1.5 px-2 text-gray-700">
+                    {s != null ? `${(s * 100).toFixed(1)}%` : '—'}
+                  </td>
+                )
+              })}
               <td className="text-right py-1.5 pl-2 text-gray-700">
                 {line.median != null ? `${line.median.toFixed(1)} mo` : 'NR'}
               </td>

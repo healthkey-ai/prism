@@ -35,7 +35,7 @@ export default function DurationOfResponse({ data }: Props) {
     }`
 
   const chartData = useMemo(
-    () => mergeKMCurves([{ key: 'dor', curve: line.curve }]),
+    () => (line ? mergeKMCurves([{ key: 'dor', curve: line.curve }]) : []),
     [line]
   )
 

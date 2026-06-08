@@ -1,7 +1,7 @@
 import datetime
 import pytest
 from unittest.mock import patch, MagicMock
-from metrics.services.subgroup_survival import _subgroup_km, compute
+from metrics.services.subgroup_survival import compute
 
 
 D = datetime.date
@@ -76,35 +76,6 @@ def _os_row(start, end=None, death=None, last_tx=None):
         "later_outcome":         None,
         "second_line_start_date": None,
     }
-
-
-# ---------------------------------------------------------------------------
-# _subgroup_km
-# ---------------------------------------------------------------------------
-
-def test_subgroup_km_drops_empty_subgroups():
-    from metrics.services.survival import os_km
-
-    populated = _FakeQS([_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1))])
-    empty = _FakeQS([])
-
-    result = _subgroup_km(os_km, [("A", populated), ("B", empty)])
-
-    labels = [r["label"] for r in result]
-    assert "A" in labels
-    assert "B" not in labels
-
-
-def test_subgroup_km_attaches_label():
-    from metrics.services.survival import os_km
-
-    qs = _FakeQS([_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1))])
-    result = _subgroup_km(os_km, [("My Group", qs)])
-
-    assert result[0]["label"] == "My Group"
-    assert "curve" in result[0]
-    assert "n" in result[0]
-    assert "median" in result[0]
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,9 @@
 import math
 from collections import defaultdict
 
+import numpy as np
+from scipy import stats
+
 
 def km_curve(times_events):
     """
@@ -67,9 +70,6 @@ def log_rank_p(groups_te):
     Returns p-value (float, 4 dp) or None if not computable (< 2 non-empty groups,
     no events, or singular covariance matrix).
     """
-    import numpy as np
-    from scipy import stats
-
     # Keep only non-empty groups
     groups = [te for te in groups_te if te]
     K = len(groups)

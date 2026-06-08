@@ -3,18 +3,6 @@ from metrics.services.km_utils import km_result, log_rank_p
 from metrics.services.clinical_filters import HIGH_RISK_CYTO, HAS_SCT, NO_SCT
 
 
-def _subgroup_km(km_fn, subgroups):
-    """
-    Run km_fn on each (label, sub_qs) pair; drop subgroups with no observations.
-    """
-    result = []
-    for label, sub_qs in subgroups:
-        km = km_fn(sub_qs)
-        if km["n"] > 0:
-            result.append({"label": label, **km})
-    return result
-
-
 def _stage_subgroups(qs):
     stage_vals = (
         qs.exclude(stage__isnull=True)

@@ -1,12 +1,18 @@
 from metrics.services.km_utils import km_result
 
-NON_RESPONDING = {"Progressive Disease", "Stable Disease", "SD", "PD"}
+RESPONDING = {
+    "Complete Response", "CR",
+    "Stringent Complete Response", "sCR",
+    "Very Good Partial Response", "VGPR",
+    "Partial Response", "PR",
+    "Minimal Response", "MR",
+}
 
 
 def _dor_times_events(qs, line_start_f, line_outcome_f, next_start_f):
     """
     Duration of Response KM for one therapy line.
-    Excludes non-responders (PD, SD, null/empty outcome).
+    Includes only confirmed responders (CR/sCR/VGPR/PR/MR).
     Event = earliest of next_start_f or death_date.
     Censored at last_treatment.
     Returns [(duration_months, event)] list.
@@ -15,7 +21,7 @@ def _dor_times_events(qs, line_start_f, line_outcome_f, next_start_f):
     times_events = []
     for r in rows:
         outcome = (r[line_outcome_f] or "").strip()
-        if not outcome or outcome in NON_RESPONDING:
+        if outcome not in RESPONDING:
             continue
 
         start = r[line_start_f]
