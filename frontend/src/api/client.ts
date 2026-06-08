@@ -19,6 +19,20 @@ api.interceptors.request.use(config => {
   return config
 })
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url: string = error.config?.url ?? ''
+    const status: number = error.response?.status
+    // On 401/403 from any endpoint except the auth check itself, reload so
+    // useAuth re-checks the session and shows LoginPage if expired.
+    if ((status === 401 || status === 403) && !url.includes('/auth/')) {
+      window.location.reload()
+    }
+    return Promise.reject(error)
+  }
+)
+
 function toParams(filters: CohortFilters): URLSearchParams {
   const p = new URLSearchParams()
   for (const [key, val] of Object.entries(filters)) {
