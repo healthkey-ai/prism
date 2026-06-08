@@ -42,6 +42,9 @@ class _FakeQS:
 
     # --- queryset methods used by os_km / pfs_km ---
 
+    def count(self):
+        return len(self._rows)
+
     def values(self, *_fields):
         return self._rows
 
@@ -114,6 +117,10 @@ def _make_stage_qs(stages):
     for stage in stages:
         row = _os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1))
         row["stage"] = stage
+        # Provide these so the now-real _FakeQS.exclude logic doesn't filter the rows
+        row["cytogenic_markers"] = "del(17p)"
+        row["stem_cell_transplant_history"] = "Autologous SCT"
+        row["mrd_status"] = None
         rows.append(row)
     return _FakeQS(rows)
 
@@ -138,11 +145,12 @@ def test_compute_subgroup_entries_have_required_fields():
     qs = _make_stage_qs(["ISS Stage I", "ISS Stage II"])
     result = compute(qs)
 
-    for entry in result["by_stage"]["os"]:
-        assert "label"  in entry
-        assert "n"      in entry
-        assert "curve"  in entry
-        assert "median" in entry
+    for strat in ("by_stage", "by_cytogenetics", "by_sct", "by_mrd"):
+        for entry in result[strat]["os"]:
+            assert "label"  in entry, f"{strat} entry missing 'label'"
+            assert "n"      in entry, f"{strat} entry missing 'n'"
+            assert "curve"  in entry, f"{strat} entry missing 'curve'"
+            assert "median" in entry, f"{strat} entry missing 'median'"
 
 
 # ---------------------------------------------------------------------------
@@ -155,14 +163,17 @@ def _make_mrd_qs(mrd_values):
         row = _os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1))
         row["mrd_status"] = mrd
         row["stage"] = None
+        row["cytogenic_markers"] = None
+        row["stem_cell_transplant_history"] = None
         rows.append(row)
     return _FakeQS(rows)
 
 
 def test_mrd_subgroups_split_by_distinct_values():
-    from metrics.services.subgroup_survival import _mrd_subgroups
+    from metrics.services.subgroup_survival import _mrd_subgroups, _MRD_MIN_N
 
-    qs = _make_mrd_qs(["MRD Negative", "MRD Negative", "MRD Positive"])
+    # Provide enough rows to clear the min-n threshold
+    qs = _make_mrd_qs(["MRD Negative"] * _MRD_MIN_N + ["MRD Positive"] * _MRD_MIN_N)
     subgroups = _mrd_subgroups(qs)
 
     labels = [label for label, _ in subgroups]
@@ -199,8 +210,22 @@ def test_mrd_subgroups_empty_when_no_assessments():
     assert subgroups == []
 
 
+def test_mrd_subgroups_drops_groups_below_min_n():
+    from metrics.services.subgroup_survival import _mrd_subgroups, _MRD_MIN_N
+
+    # Only "MRD Negative" meets the threshold; "MRD Positive" has too few rows
+    qs = _make_mrd_qs(["MRD Negative"] * _MRD_MIN_N + ["MRD Positive"] * (_MRD_MIN_N - 1))
+    subgroups = _mrd_subgroups(qs)
+
+    labels = [label for label, _ in subgroups]
+    assert "MRD Negative" in labels
+    assert "MRD Positive" not in labels
+
+
 def test_by_mrd_in_compute_output():
-    qs = _make_mrd_qs(["MRD Negative", "MRD Positive"])
+    from metrics.services.subgroup_survival import _MRD_MIN_N
+
+    qs = _make_mrd_qs(["MRD Negative"] * _MRD_MIN_N + ["MRD Positive"] * _MRD_MIN_N)
     result = compute(qs)
 
     assert "by_mrd" in result

@@ -41,15 +41,24 @@ def _sct_subgroups(qs):
     ]
 
 
+_MRD_MIN_N = 5
+_MRD_MAX_GROUPS = 10
+
+
 def _mrd_subgroups(qs):
     # Only include patients with a recorded MRD assessment
     assessed = qs.exclude(mrd_status__isnull=True).exclude(mrd_status="")
     values = (
         assessed.values_list("mrd_status", flat=True)
         .distinct()
-        .order_by("mrd_status")
+        .order_by("mrd_status")[: _MRD_MAX_GROUPS]
     )
-    return [(val, assessed.filter(mrd_status=val)) for val in values]
+    subgroups = []
+    for val in values:
+        sub = assessed.filter(mrd_status=val)
+        if sub.count() >= _MRD_MIN_N:
+            subgroups.append((val, sub))
+    return subgroups
 
 
 def _stratify(qs, subgroups_fn):
