@@ -15,13 +15,14 @@ interface Props {
   data: NonNullable<MetricsResponse['subgroup_survival']>
 }
 
-type StratKey   = 'by_stage' | 'by_cytogenetics' | 'by_sct'
+type StratKey   = 'by_stage' | 'by_cytogenetics' | 'by_sct' | 'by_mrd'
 type OutcomeKey = 'os' | 'pfs'
 
 const STRAT_CONFIG: { key: StratKey; label: string }[] = [
   { key: 'by_stage',        label: 'ISS Stage' },
   { key: 'by_cytogenetics', label: 'Cytogenetic Risk' },
   { key: 'by_sct',          label: 'SCT Status' },
+  { key: 'by_mrd',          label: 'MRD Status' },
 ]
 
 const OUTCOME_CONFIG: { key: OutcomeKey; label: string }[] = [

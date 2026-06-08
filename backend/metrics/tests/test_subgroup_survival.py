@@ -18,10 +18,24 @@ class _FakeQS:
     # --- queryset methods used by subgroup splitting ---
 
     def filter(self, *args, **kwargs):
-        return self  # tests control sub-qs directly via monkeypatching
+        if not kwargs:  # Q-object call — keep passthrough
+            return self
+        rows = self._rows
+        for key, val in kwargs.items():
+            rows = [r for r in rows if r.get(key) == val]
+        return _FakeQS(rows)
 
     def exclude(self, *args, **kwargs):
-        return self
+        if not kwargs:  # Q-object call — keep passthrough
+            return self
+        rows = self._rows
+        for key, val in kwargs.items():
+            if key.endswith("__isnull"):
+                field = key[: -len("__isnull")]
+                rows = [r for r in rows if (r.get(field) is None) != val]
+            else:
+                rows = [r for r in rows if r.get(key) != val]
+        return _FakeQS(rows)
 
     def values_list(self, field, flat=False):
         return _FakeValuesList([r.get(field) for r in self._rows])
@@ -108,14 +122,14 @@ def test_compute_returns_expected_top_level_keys():
     qs = _make_stage_qs(["ISS Stage I", "ISS Stage II"])
     result = compute(qs)
 
-    assert set(result.keys()) == {"by_stage", "by_cytogenetics", "by_sct"}
+    assert set(result.keys()) == {"by_stage", "by_cytogenetics", "by_sct", "by_mrd"}
 
 
 def test_compute_each_stratification_has_os_and_pfs():
     qs = _make_stage_qs(["ISS Stage I"])
     result = compute(qs)
 
-    for strat in ("by_stage", "by_cytogenetics", "by_sct"):
+    for strat in ("by_stage", "by_cytogenetics", "by_sct", "by_mrd"):
         assert "os"  in result[strat], f"{strat} missing 'os'"
         assert "pfs" in result[strat], f"{strat} missing 'pfs'"
 
@@ -129,3 +143,66 @@ def test_compute_subgroup_entries_have_required_fields():
         assert "n"      in entry
         assert "curve"  in entry
         assert "median" in entry
+
+
+# ---------------------------------------------------------------------------
+# MRD subgroup tests
+# ---------------------------------------------------------------------------
+
+def _make_mrd_qs(mrd_values):
+    rows = []
+    for mrd in mrd_values:
+        row = _os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1))
+        row["mrd_status"] = mrd
+        row["stage"] = None
+        rows.append(row)
+    return _FakeQS(rows)
+
+
+def test_mrd_subgroups_split_by_distinct_values():
+    from metrics.services.subgroup_survival import _mrd_subgroups
+
+    qs = _make_mrd_qs(["MRD Negative", "MRD Negative", "MRD Positive"])
+    subgroups = _mrd_subgroups(qs)
+
+    labels = [label for label, _ in subgroups]
+    assert "MRD Negative" in labels
+    assert "MRD Positive" in labels
+
+
+def test_mrd_subgroups_excludes_null_and_empty():
+    from metrics.services.subgroup_survival import _mrd_subgroups
+
+    rows = [
+        {**_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1)), "mrd_status": None},
+        {**_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1)), "mrd_status": ""},
+        {**_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1)), "mrd_status": "MRD Negative"},
+    ]
+    qs = _FakeQS(rows)
+    subgroups = _mrd_subgroups(qs)
+
+    labels = [label for label, _ in subgroups]
+    assert None not in labels
+    assert "" not in labels
+
+
+def test_mrd_subgroups_empty_when_no_assessments():
+    from metrics.services.subgroup_survival import _mrd_subgroups
+
+    rows = [
+        {**_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1)), "mrd_status": None},
+        {**_os_row(D(2020, 1, 1), last_tx=D(2022, 1, 1)), "mrd_status": None},
+    ]
+    qs = _FakeQS(rows)
+    subgroups = _mrd_subgroups(qs)
+
+    assert subgroups == []
+
+
+def test_by_mrd_in_compute_output():
+    qs = _make_mrd_qs(["MRD Negative", "MRD Positive"])
+    result = compute(qs)
+
+    assert "by_mrd" in result
+    assert "os"  in result["by_mrd"]
+    assert "pfs" in result["by_mrd"]

@@ -41,6 +41,17 @@ def _sct_subgroups(qs):
     ]
 
 
+def _mrd_subgroups(qs):
+    # Only include patients with a recorded MRD assessment
+    assessed = qs.exclude(mrd_status__isnull=True).exclude(mrd_status="")
+    values = (
+        assessed.values_list("mrd_status", flat=True)
+        .distinct()
+        .order_by("mrd_status")
+    )
+    return [(val, assessed.filter(mrd_status=val)) for val in values]
+
+
 def _stratify(qs, subgroups_fn):
     subs = subgroups_fn(qs)
     # Note: fires 2 DB queries per subgroup (os_km + pfs_km each call .values()).
@@ -57,4 +68,5 @@ def compute(qs):
         "by_stage":        _stratify(qs, _stage_subgroups),
         "by_cytogenetics": _stratify(qs, _cyto_subgroups),
         "by_sct":          _stratify(qs, _sct_subgroups),
+        "by_mrd":          _stratify(qs, _mrd_subgroups),
     }

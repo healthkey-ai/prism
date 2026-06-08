@@ -169,6 +169,7 @@ export interface MetricsResponse {
     by_stage:        SubgroupStratification
     by_cytogenetics: SubgroupStratification
     by_sct:          SubgroupStratification
+    by_mrd:          SubgroupStratification
   }
 }
 
