@@ -4,14 +4,11 @@ import Dashboard from './components/Dashboard'
 import LoginPage from './components/Auth/LoginPage'
 import { useAnalytics } from './hooks/useAnalytics'
 import { useAuth } from './hooks/useAuth'
+import type { AuthState } from './hooks/useAuth'
 import type { CohortFilters } from './types'
 
 export default function App() {
   const auth = useAuth()
-  const { filters, settings, metrics, loading, updateFilter, clearFilters, setFilters } = useAnalytics()
-  const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
-  const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
-  const [cohortDirty, setCohortDirty] = useState(false)
 
   if (auth.loading) {
     return (
@@ -24,6 +21,15 @@ export default function App() {
   if (!auth.user) {
     return <LoginPage auth={auth} />
   }
+
+  return <AuthenticatedApp auth={auth} />
+}
+
+function AuthenticatedApp({ auth }: { auth: AuthState }) {
+  const { filters, settings, metrics, loading, updateFilter, clearFilters, setFilters } = useAnalytics()
+  const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
+  const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
+  const [cohortDirty, setCohortDirty] = useState(false)
 
   function handleLoadCohort(f: CohortFilters, cohortId?: number, cohortName?: string) {
     setFilters(f)
@@ -62,7 +68,7 @@ export default function App() {
           metrics={metrics}
           loading={loading}
           disease={filters.disease ?? 'Multiple Myeloma'}
-          user={auth.user}
+          user={auth.user!}
           onLogout={auth.logout}
           activeSavedCohortId={activeSavedCohortId}
         />
