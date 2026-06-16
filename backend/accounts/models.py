@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
@@ -66,3 +67,34 @@ class Identity(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email or self.uid
+
+
+class UserProfile(models.Model):
+    """
+    Stores analytics-specific role and organisation for each Identity.
+    Managed table — migrations will create accounts_userprofile.
+    db_constraint=False because the identity table is unmanaged (no FK constraint in DB).
+    """
+    ROLE_USER    = "user"
+    ROLE_PREMIUM = "premium"
+    ROLE_STAFF   = "staff"
+    ROLE_CHOICES = [
+        (ROLE_USER,    "User"),
+        (ROLE_PREMIUM, "Premium"),
+        (ROLE_STAFF,   "Staff"),
+    ]
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile",
+        db_constraint=False,
+    )
+    organization = models.CharField(max_length=255, blank=True)
+    role         = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_USER)
+
+    class Meta:
+        db_table = "accounts_userprofile"
+
+    def __str__(self):
+        return f"{self.user} [{self.role}] @ {self.organization}"

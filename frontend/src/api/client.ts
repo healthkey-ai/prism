@@ -71,8 +71,13 @@ export async function logout() {
   await api.post('/auth/logout/')
 }
 
-export async function signup(email: string, password: string, name: string) {
-  const { data } = await api.post('/auth/signup/', { email, password, name })
+export async function signup(email: string, password: string, name: string, organization: string) {
+  const { data } = await api.post('/auth/signup/', { email, password, name, organization })
+  return data
+}
+
+export async function fetchOrganizations(): Promise<string[]> {
+  const { data } = await api.get<string[]>('/auth/organizations/')
   return data
 }
 

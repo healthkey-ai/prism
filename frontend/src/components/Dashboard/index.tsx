@@ -51,6 +51,7 @@ function NoDataPlaceholder() {
 }
 
 export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId }: Props) {
+  const canExport = user.role === 'premium' || user.role === 'staff'
   const [tab, setTab]                 = useState<DashboardTab>('outcomes')
   const [responseTab, setResponseTab] = useState<ResponseLineTab>('1L')
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -153,20 +154,35 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
           {/* Export dropdown */}
           <div className="relative" ref={exportMenuRef}>
-            <button
-              onClick={() => setShowExportMenu(v => !v)}
-              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Export
-            </button>
-            {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 min-w-[120px]">
-                <button onClick={() => handleExport('csv')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">CSV</button>
-                <button onClick={() => handleExport('json')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">JSON</button>
-              </div>
+            {canExport ? (
+              <>
+                <button
+                  onClick={() => setShowExportMenu(v => !v)}
+                  className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export
+                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 min-w-[120px]">
+                    <button onClick={() => handleExport('csv')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">CSV</button>
+                    <button onClick={() => handleExport('json')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">JSON</button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <button
+                disabled
+                title="Premium subscription required"
+                className="flex items-center gap-1.5 text-sm text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 cursor-not-allowed opacity-60"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Export
+              </button>
             )}
           </div>
         </div>

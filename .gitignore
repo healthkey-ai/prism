@@ -219,3 +219,6 @@ __marimo__/
 
 # Frontend build output
 frontend/dist/
+
+# macOS
+.DS_Store

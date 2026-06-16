@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { AuthState } from '../../hooks/useAuth'
+import { fetchOrganizations } from '../../api/client'
 
 interface Props {
   auth: AuthState
@@ -10,18 +11,35 @@ export default function LoginPage({ auth }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [organization, setOrganization] = useState('')
+  const [organizations, setOrganizations] = useState<string[]>([])
+  const [orgsLoading, setOrgsLoading] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (mode === 'signup') {
+      setOrgsLoading(true)
+      fetchOrganizations()
+        .then(setOrganizations)
+        .catch(() => setOrganizations([]))
+        .finally(() => setOrgsLoading(false))
+    }
+  }, [mode])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    if (mode === 'signup' && !organization) {
+      setError('Please select your organisation.')
+      return
+    }
     setSubmitting(true)
     try {
       if (mode === 'login') {
         await auth.login(email, password)
       } else {
-        await auth.signup(email, password, name)
+        await auth.signup(email, password, name, organization)
       }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -91,6 +109,29 @@ export default function LoginPage({ auth }: Props) {
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
               />
             </div>
+
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Organisation</label>
+                {orgsLoading ? (
+                  <p className="text-xs text-slate-400">Loading organisations…</p>
+                ) : organizations.length === 0 ? (
+                  <p className="text-xs text-slate-400">No organisations found — contact your administrator</p>
+                ) : (
+                  <select
+                    value={organization}
+                    onChange={e => setOrganization(e.target.value)}
+                    required
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500"
+                  >
+                    <option value="">Select organisation…</option>
+                    {organizations.map(org => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             {error && (
               <p className="text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">

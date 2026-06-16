@@ -3,6 +3,8 @@ export interface User {
   email: string
   name: string
   is_staff: boolean
+  role: 'user' | 'premium' | 'staff'
+  organization: string
 }
 
 export interface SavedCohort {

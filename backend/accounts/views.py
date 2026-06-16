@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework import status
 
-from .models import Identity
+from .models import Identity, UserProfile
 
 
 @api_view(["POST"])
@@ -23,7 +23,7 @@ def login_view(request):
         return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
     request.session.cycle_key()
     login(request, user)
-    get_token(request)  # ensure CSRF cookie is set on the response
+    get_token(request)
     return Response(_user_data(user))
 
 
@@ -38,12 +38,16 @@ def logout_view(request):
 @permission_classes([AllowAny])
 @throttle_classes([AnonRateThrottle])
 def signup_view(request):
-    email = request.data.get("email", "").strip()
-    password = request.data.get("password", "")
-    name = request.data.get("name", "").strip()
+    email        = request.data.get("email", "").strip()
+    password     = request.data.get("password", "")
+    name         = request.data.get("name", "").strip()
+    organization = request.data.get("organization", "").strip()
 
     if not email or not password:
         return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not organization:
+        return Response({"detail": "Organization is required."}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         validate_password(password)
@@ -54,23 +58,51 @@ def signup_view(request):
         user = Identity.objects.create_user(email=email, password=password, name=name)
     except IntegrityError:
         return Response({"detail": "An account with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
+
+    UserProfile.objects.create(user=user, organization=organization, role=UserProfile.ROLE_USER)
+
     request.session.cycle_key()
     login(request, user, backend="accounts.backends.EmailBackend")
-    get_token(request)  # ensure CSRF cookie is set on the response
+    get_token(request)
     return Response(_user_data(user), status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me_view(request):
-    get_token(request)  # ensure CSRF cookie is issued/refreshed on every page load
+    get_token(request)
     return Response(_user_data(request.user))
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def organizations_view(request):
+    """Return sorted distinct organization values from patient_info for the signup dropdown."""
+    from patients.models import PatientInfo
+    orgs = (
+        PatientInfo.objects
+        .exclude(organization__isnull=True)
+        .exclude(organization="")
+        .values_list("organization", flat=True)
+        .distinct()
+        .order_by("organization")
+    )
+    return Response(list(orgs))
+
+
 def _user_data(user):
+    try:
+        profile = user.profile
+        role         = profile.role
+        organization = profile.organization
+    except UserProfile.DoesNotExist:
+        role         = UserProfile.ROLE_USER
+        organization = ""
     return {
-        "uid": user.uid,
-        "email": user.email,
-        "name": user.name,
-        "is_staff": user.is_staff,
+        "uid":          user.uid,
+        "email":        user.email,
+        "name":         user.name,
+        "is_staff":     user.is_staff,
+        "role":         role,
+        "organization": organization,
     }
