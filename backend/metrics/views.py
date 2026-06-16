@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from accounts.models import UserProfile
+from accounts.utils import apply_org_scope
 from cohorts.filters import apply_cohort_filters
 from metrics.services import (
     response_rates,
@@ -19,32 +19,12 @@ from metrics.services import (
 )
 
 
-def _apply_org_scope(qs, user):
-    """
-    Restrict queryset to the user's organisation unless they have Staff role.
-    Returns (scoped_qs, error_response_or_None).
-    """
-    try:
-        profile = user.profile
-    except UserProfile.DoesNotExist:
-        # No profile → no data (user must be set up by admin first)
-        return None, Response({"cohort": {"count": 0}})
-
-    if profile.role == UserProfile.ROLE_STAFF:
-        return qs, None  # Staff see all orgs
-
-    if not profile.organization:
-        return None, Response({"cohort": {"count": 0}})
-
-    return qs.filter(organization=profile.organization), None
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def metrics(request):
     qs = apply_cohort_filters(request)
 
-    qs, err = _apply_org_scope(qs, request.user)
+    qs, err = apply_org_scope(qs, request.user)
     if err:
         return err
 

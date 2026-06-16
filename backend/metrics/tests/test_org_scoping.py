@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from rest_framework.response import Response
 from accounts.models import UserProfile
-from metrics.views import _apply_org_scope
+from accounts.utils import apply_org_scope as _apply_org_scope
 
 
 def _make_user(role, organization='Org A', has_profile=True):
@@ -41,22 +41,22 @@ def test_user_role_scoped_to_org():
     qs.filter.assert_called_once_with(organization='Org A')
 
 
-def test_user_with_no_org_returns_empty_response():
+def test_user_with_no_org_returns_403():
     qs = _make_qs()
     user = _make_user(UserProfile.ROLE_USER, organization='')
     scoped_qs, err = _apply_org_scope(qs, user)
     assert scoped_qs is None
     assert err is not None
-    assert err.data == {'cohort': {'count': 0}}
+    assert err.status_code == 403
 
 
-def test_no_profile_returns_empty_response():
+def test_no_profile_returns_403():
     qs = _make_qs()
     user = _make_user(None, has_profile=False)
     scoped_qs, err = _apply_org_scope(qs, user)
     assert scoped_qs is None
     assert err is not None
-    assert err.data == {'cohort': {'count': 0}}
+    assert err.status_code == 403
 
 
 def test_premium_role_scoped_to_org():

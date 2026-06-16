@@ -51,7 +51,7 @@ function NoDataPlaceholder() {
 }
 
 export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId }: Props) {
-  const canExport = user.role === 'premium' || user.role === 'staff'
+  const canExport = (user.role ?? 'user') === 'premium' || (user.role ?? 'user') === 'staff'
   const [tab, setTab]                 = useState<DashboardTab>('outcomes')
   const [responseTab, setResponseTab] = useState<ResponseLineTab>('1L')
   const [showExportMenu, setShowExportMenu] = useState(false)

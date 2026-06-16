@@ -24,9 +24,10 @@ api.interceptors.response.use(
   (error) => {
     const url: string = error.config?.url ?? ''
     const status: number = error.response?.status
-    // On 401/403 from any endpoint except the auth check itself, reload so
-    // useAuth re-checks the session and shows LoginPage if expired.
-    if ((status === 401 || status === 403) && !url.includes('/auth/')) {
+    // On 401 (session expired) from non-auth endpoints, reload so useAuth
+    // re-checks and shows LoginPage. 403 means "authorised but forbidden"
+    // (e.g. non-Premium hitting export) — do NOT reload; let the caller handle it.
+    if (status === 401 && !url.includes('/auth/')) {
       window.location.reload()
     }
     return Promise.reject(error)

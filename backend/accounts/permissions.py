@@ -1,5 +1,7 @@
 from rest_framework.permissions import BasePermission
 
+from accounts.models import UserProfile
+
 
 class IsPremiumOrStaff(BasePermission):
     """Allow access only to users with Premium or Staff analytics role."""
@@ -10,8 +12,8 @@ class IsPremiumOrStaff(BasePermission):
             return False
         try:
             return request.user.profile.role in (
-                request.user.profile.ROLE_PREMIUM,
-                request.user.profile.ROLE_STAFF,
+                UserProfile.ROLE_PREMIUM,
+                UserProfile.ROLE_STAFF,
             )
-        except Exception:
+        except (UserProfile.DoesNotExist, AttributeError):
             return False

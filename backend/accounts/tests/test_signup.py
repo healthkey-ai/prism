@@ -1,8 +1,14 @@
 """Tests for the signup view — org required, UserProfile created."""
+from contextlib import contextmanager
 from unittest.mock import patch, MagicMock, call
 from rest_framework.test import APIRequestFactory
 from accounts.views import signup_view
 from accounts.models import UserProfile
+
+
+@contextmanager
+def _noop_atomic():
+    yield
 
 
 def _post(data):
@@ -27,6 +33,7 @@ def test_signup_without_org_returns_400():
 @patch('accounts.views.get_token')
 @patch('accounts.views.validate_password')
 @patch('accounts.views.Identity.objects.create_user')
+@patch('accounts.views.transaction.atomic', _noop_atomic)
 def test_signup_with_org_creates_profile(
     mock_create_user, mock_validate, mock_get_token, mock_login, mock_profile_create
 ):
@@ -59,6 +66,7 @@ def test_signup_with_org_creates_profile(
 @patch('accounts.views.get_token')
 @patch('accounts.views.validate_password')
 @patch('accounts.views.Identity.objects.create_user')
+@patch('accounts.views.transaction.atomic', _noop_atomic)
 def test_signup_response_includes_role_and_org(
     mock_create_user, mock_validate, mock_get_token, mock_login, mock_profile_create
 ):

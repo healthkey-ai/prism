@@ -10,8 +10,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework import status
 
-from accounts.models import UserProfile
 from accounts.permissions import IsPremiumOrStaff
+from accounts.utils import apply_org_scope
 from patients.models import PatientInfo
 from .filters import apply_cohort_filters
 from .models import SavedCohort
@@ -241,15 +241,9 @@ def saved_cohort_export(request, pk):
     fake_req = _FakeRequest(cohort.filters)
     qs = apply_cohort_filters(fake_req)
 
-    # Org scoping: non-staff users only export their own org's data
-    try:
-        profile = request.user.profile
-        if profile.role != UserProfile.ROLE_STAFF:
-            if not profile.organization:
-                return Response({"detail": "No organisation assigned."}, status=status.HTTP_403_FORBIDDEN)
-            qs = qs.filter(organization=profile.organization)
-    except UserProfile.DoesNotExist:
-        return Response({"detail": "No organisation assigned."}, status=status.HTTP_403_FORBIDDEN)
+    qs, err = apply_org_scope(qs, request.user)
+    if err:
+        return err
     fmt = request.query_params.get("file_format", "csv")
     safe_name = _safe_filename(cohort.name)
 

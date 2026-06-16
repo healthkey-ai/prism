@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.middleware.csrf import get_token
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -55,11 +55,11 @@ def signup_view(request):
         return Response({"detail": " ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        user = Identity.objects.create_user(email=email, password=password, name=name)
+        with transaction.atomic():
+            user = Identity.objects.create_user(email=email, password=password, name=name)
+            UserProfile.objects.create(user=user, organization=organization, role=UserProfile.ROLE_USER)
     except IntegrityError:
         return Response({"detail": "An account with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
-
-    UserProfile.objects.create(user=user, organization=organization, role=UserProfile.ROLE_USER)
 
     request.session.cycle_key()
     login(request, user, backend="accounts.backends.EmailBackend")
