@@ -170,6 +170,18 @@ export interface MetricsResponse {
     by_cytogenetics: SubgroupStratification
     by_sct:          SubgroupStratification
   }
+  pathway_sunburst?: {
+    total: number
+    children: {
+      name: string
+      count: number
+      children: {
+        name: string
+        count: number
+        children: { name: string; count: number }[]
+      }[]
+    }[]
+  }
 }
 
 export interface SurvivalLine {

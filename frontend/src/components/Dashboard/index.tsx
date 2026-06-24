@@ -13,6 +13,7 @@ import SurvivalCurves from '../charts/SurvivalCurves'
 import TTNT from '../charts/TTNT'
 import Switching from '../charts/Switching'
 import SubgroupSurvival from '../charts/SubgroupSurvival'
+import PathwaySunburst from '../charts/PathwaySunburst'
 import api from '../../api/client'
 
 interface Props {
@@ -248,6 +249,12 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 {metrics?.switching ? <Switching data={metrics.switching} /> : <NoDataPlaceholder />}
               </MetricCard>
             </div>
+
+            <MetricCard title="Treatment Pathways">
+              {metrics?.pathway_sunburst
+                ? <PathwaySunburst data={metrics.pathway_sunburst} />
+                : <NoDataPlaceholder />}
+            </MetricCard>
           </>
         ) : (
           <>

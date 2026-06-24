@@ -14,6 +14,7 @@ from metrics.services import (
     ttnt,
     switching,
     subgroup_survival,
+    pathway_sunburst,
 )
 
 
@@ -38,4 +39,5 @@ def metrics(request):
         "ttnt":                ttnt.compute(qs),
         "switching":           switching.compute(qs),
         "subgroup_survival":   subgroup_survival.compute(qs),
+        "pathway_sunburst":    pathway_sunburst.compute(qs),
     })
