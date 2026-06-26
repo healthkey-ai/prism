@@ -13,6 +13,7 @@ import SurvivalCurves from '../charts/SurvivalCurves'
 import TTNT from '../charts/TTNT'
 import Switching from '../charts/Switching'
 import SubgroupSurvival from '../charts/SubgroupSurvival'
+import PathwaySunburst from '../charts/PathwaySunburst'
 import DurationOfResponse from '../charts/DurationOfResponse'
 import api from '../../api/client'
 
@@ -252,6 +253,12 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
             <MetricCard title="Duration of Response (DOR)">
               {metrics?.dor ? <DurationOfResponse data={metrics.dor} /> : <NoDataPlaceholder />}
+            </MetricCard>
+
+            <MetricCard title="Treatment Pathways">
+              {metrics?.pathway_sunburst
+                ? <PathwaySunburst data={metrics.pathway_sunburst} />
+                : <NoDataPlaceholder />}
             </MetricCard>
           </>
         ) : (
