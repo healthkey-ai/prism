@@ -66,7 +66,6 @@ function arcPath(
 
 function buildSegs(
   data: PathwayData,
-  cx: number, cy: number,
   R0: number, RW: number,
 ): ArcSeg[] {
   const segs: ArcSeg[] = []
@@ -158,7 +157,7 @@ export default function PathwaySunburst({ data }: Props) {
   const R0 = 64
   const RW = 62
 
-  const segs = useMemo(() => buildSegs(data, cx, cy, R0, RW), [data])
+  const segs = useMemo(() => buildSegs(data, R0, RW), [data])
   const top1L = useMemo(
     () => [...data.children].sort((a, b) => b.count - a.count).slice(0, 10),
     [data],
