@@ -169,6 +169,11 @@ export interface MetricsResponse {
     by_stage:        SubgroupStratification
     by_cytogenetics: SubgroupStratification
     by_sct:          SubgroupStratification
+    by_mrd:          SubgroupStratification
+  }
+  dor?: {
+    first_line:  SurvivalLine
+    second_line: SurvivalLine
   }
   pathway_sunburst?: {
     total: number
@@ -185,7 +190,7 @@ export interface MetricsResponse {
 }
 
 export interface SurvivalLine {
-  curve: { time: number; survival: number; at_risk: number }[]
+  curve: { time: number; survival: number; at_risk: number; ci_lower?: number; ci_upper?: number }[]
   n: number
   median: number | null
 }
@@ -195,8 +200,10 @@ export interface SubgroupSurvivalLine extends SurvivalLine {
 }
 
 export interface SubgroupStratification {
-  os:  SubgroupSurvivalLine[]
-  pfs: SubgroupSurvivalLine[]
+  os:    SubgroupSurvivalLine[]
+  pfs:   SubgroupSurvivalLine[]
+  os_p?: number | null
+  pfs_p?: number | null
 }
 
 export interface SwitchingRow {

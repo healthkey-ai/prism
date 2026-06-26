@@ -73,7 +73,12 @@ export default function SurvivalCurves({ data }: Props) {
           />
           <Tooltip
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            formatter={((v: unknown) => [`${(Number(v) * 100).toFixed(1)}%`]) as any}
+            formatter={((v: unknown, name: unknown) => {
+              const nameStr = String(name)
+              if (nameStr.endsWith('_lower') || nameStr.endsWith('_upper')) return null
+              const cfg = LINE_CONFIG.find((c) => c.key === nameStr)
+              return [`${(Number(v) * 100).toFixed(1)}%`, cfg?.label ?? nameStr]
+            }) as any}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             labelFormatter={((t: number) => `${t} months`) as any}
             contentStyle={{ fontSize: 12 }}
@@ -92,6 +97,37 @@ export default function SurvivalCurves({ data }: Props) {
                 connectNulls
               />
             ) : null
+          )}
+          {/* CI bands — dashed, low opacity, excluded from legend/tooltip */}
+          {LINE_CONFIG.map(({ key, color }) =>
+            data[key].n > 0
+              ? [
+                  <Line
+                    key={`${key}_lower`}
+                    type="stepAfter"
+                    dataKey={`${key}_lower`}
+                    name={`${key}_lower`}
+                    stroke={color}
+                    strokeWidth={1}
+                    strokeOpacity={0.3}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    legendType="none"
+                  />,
+                  <Line
+                    key={`${key}_upper`}
+                    type="stepAfter"
+                    dataKey={`${key}_upper`}
+                    name={`${key}_upper`}
+                    stroke={color}
+                    strokeWidth={1}
+                    strokeOpacity={0.3}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    legendType="none"
+                  />,
+                ]
+              : null
           )}
         </LineChart>
       </ResponsiveContainer>
