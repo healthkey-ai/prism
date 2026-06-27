@@ -19,7 +19,7 @@ if not _SECRET_KEY:
 
 SECRET_KEY = _SECRET_KEY
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com").split(",")
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com,prism.healthkey.ai").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -88,7 +88,9 @@ if not DEBUG:
 
 _extra_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
 CSRF_TRUSTED_ORIGINS = [o for o in _extra_csrf.split(",") if o]
-if DEBUG:
+if not DEBUG:
+    CSRF_TRUSTED_ORIGINS += ["https://prism.healthkey.ai"]
+else:
     CSRF_TRUSTED_ORIGINS += ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 LANGUAGE_CODE = "en-us"
