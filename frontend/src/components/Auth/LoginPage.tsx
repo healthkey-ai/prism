@@ -133,19 +133,19 @@ export default function LoginPage({ auth }: Props) {
             {mode === 'signup' && (
               <div>
                 <label className="block text-xs text-slate-400 mb-1">
-                  Organisation <span className="text-slate-500">(optional)</span>
+                  Organization <span className="text-slate-500">(optional)</span>
                 </label>
                 {orgsLoading ? (
-                  <p className="text-xs text-slate-400">Loading organisations…</p>
+                  <p className="text-xs text-slate-400">Loading organizations…</p>
                 ) : organizations.length === 0 ? (
-                  <p className="text-xs text-slate-400">No organisations available — contact your administrator</p>
+                  <p className="text-xs text-slate-400">No organizations available — contact your administrator</p>
                 ) : (
                   <select
                     value={organization}
                     onChange={e => setOrganization(e.target.value)}
                     className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500"
                   >
-                    <option value="">No organisation</option>
+                    <option value="">No organization</option>
                     {organizations.map(org => (
                       <option key={org} value={org}>{org}</option>
                     ))}
