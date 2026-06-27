@@ -1,6 +1,20 @@
 from django.db import models
 
 
+class SourceOrganization(models.Model):
+    """Read-only mirror of promop's organization table. managed=False."""
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=60, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "organization"
+
+    def __str__(self):
+        return self.name
+
+
 class PatientInfo(models.Model):
     """Read-only mirror of ctomop.patient_info. managed=False — no migrations."""
 
