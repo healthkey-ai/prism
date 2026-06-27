@@ -21,7 +21,12 @@ export default function LoginPage({ auth }: Props) {
     if (mode === 'signup') {
       setOrgsLoading(true)
       fetchOrganizations()
-        .then(setOrganizations)
+        .then(orgs => {
+          setOrganizations(orgs)
+          // Default to ABC Foundation; fall back to first org if absent
+          const defaultOrg = orgs.includes('ABC Foundation') ? 'ABC Foundation' : (orgs[0] ?? '')
+          setOrganization(defaultOrg)
+        })
         .catch(() => setOrganizations([]))
         .finally(() => setOrgsLoading(false))
     }
@@ -30,10 +35,6 @@ export default function LoginPage({ auth }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (mode === 'signup' && !organization) {
-      setError('Please select your organisation.')
-      return
-    }
     setSubmitting(true)
     try {
       if (mode === 'login') {
@@ -112,19 +113,20 @@ export default function LoginPage({ auth }: Props) {
 
             {mode === 'signup' && (
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Organisation</label>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Organisation <span className="text-slate-500">(optional)</span>
+                </label>
                 {orgsLoading ? (
                   <p className="text-xs text-slate-400">Loading organisations…</p>
                 ) : organizations.length === 0 ? (
-                  <p className="text-xs text-slate-400">No organisations found — contact your administrator</p>
+                  <p className="text-xs text-slate-400">No organisations available — contact your administrator</p>
                 ) : (
                   <select
                     value={organization}
                     onChange={e => setOrganization(e.target.value)}
-                    required
                     className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500"
                   >
-                    <option value="">Select organisation…</option>
+                    <option value="">No organisation</option>
                     {organizations.map(org => (
                       <option key={org} value={org}>{org}</option>
                     ))}

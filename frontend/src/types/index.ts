@@ -177,6 +177,10 @@ export interface MetricsResponse {
     first_line:  SurvivalLine
     second_line: SurvivalLine
   }
+  treatment_pathways?: {
+    name: string
+    children: PathwayNode[]
+  }
 }
 
 export interface SurvivalLine {
@@ -200,4 +204,10 @@ export interface SwitchingRow {
   from_regimen: string
   n_switched: number
   switches: { to_regimen: string; n: number; pct: number }[]
+}
+
+export interface PathwayNode {
+  name: string
+  value?: number
+  children?: PathwayNode[]
 }

@@ -14,6 +14,8 @@ import TTNT from '../charts/TTNT'
 import Switching from '../charts/Switching'
 import SubgroupSurvival from '../charts/SubgroupSurvival'
 import DurationOfResponse from '../charts/DurationOfResponse'
+import TreatmentPathwaysSunburst from '../charts/TreatmentPathwaysSunburst'
+import TreatmentSankey from '../charts/TreatmentSankey'
 import api from '../../api/client'
 
 interface Props {
@@ -25,7 +27,7 @@ interface Props {
   activeSavedCohortId: number | null
 }
 
-type DashboardTab    = 'outcomes' | 'profile'
+type DashboardTab    = 'outcomes' | 'treatments' | 'profile'
 type ResponseLineTab = '1L' | '2L' | '3L+'
 
 function Spinner() {
@@ -78,8 +80,9 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
     : metrics?.response_rates?.later_line ?? []
 
   const TABS: { id: DashboardTab; label: string }[] = [
-    { id: 'outcomes', label: 'Outcomes' },
-    { id: 'profile',  label: 'Patient Profile' },
+    { id: 'outcomes',   label: 'Outcomes' },
+    { id: 'treatments', label: 'Treatments' },
+    { id: 'profile',    label: 'Patient Profile' },
   ]
 
   async function handleExport(format: 'csv' | 'json') {
@@ -235,6 +238,31 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               />
             </MetricCard>
 
+            <MetricCard title="Duration of Response (DOR)">
+              {metrics?.dor ? <DurationOfResponse data={metrics.dor} /> : <NoDataPlaceholder />}
+            </MetricCard>
+          </>
+        ) : tab === 'treatments' ? (
+          <>
+            {/* Treatment Pathways: sunburst + Sankey side by side */}
+            <MetricCard title="Treatment Pathways (OHDSI-Style)">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Pathway Sunburst</h3>
+                  {metrics?.treatment_pathways
+                    ? <TreatmentPathwaysSunburst data={metrics.treatment_pathways} />
+                    : <NoDataPlaceholder />}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Treatment Flow (Sankey)</h3>
+                  {metrics?.switching
+                    ? <TreatmentSankey data={metrics.switching} />
+                    : <NoDataPlaceholder />}
+                </div>
+              </div>
+            </MetricCard>
+
+            {/* 1L Patterns + Lines of Therapy */}
             <div className="grid grid-cols-2 gap-6">
               <MetricCard title="1st Line Treatment Patterns">
                 <TreatmentPatterns data={metrics?.treatment_patterns?.first_line ?? []} title="" />
@@ -247,6 +275,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               </MetricCard>
             </div>
 
+            {/* Treatment Duration + Sequences */}
             <div className="grid grid-cols-2 gap-6">
               <MetricCard title="Treatment Duration">
                 {metrics?.treatment_duration ? <TreatmentDuration data={metrics.treatment_duration} /> : <NoDataPlaceholder />}
@@ -265,10 +294,6 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 {metrics?.switching ? <Switching data={metrics.switching} /> : <NoDataPlaceholder />}
               </MetricCard>
             </div>
-
-            <MetricCard title="Duration of Response (DOR)">
-              {metrics?.dor ? <DurationOfResponse data={metrics.dor} /> : <NoDataPlaceholder />}
-            </MetricCard>
           </>
         ) : (
           <>

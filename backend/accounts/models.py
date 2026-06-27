@@ -69,6 +69,26 @@ class Identity(AbstractBaseUser, PermissionsMixin):
         return self.email or self.uid
 
 
+class Organization(models.Model):
+    """
+    Organisations available in the signup dropdown.
+    allowed_email_domain: if blank, any email can join; otherwise only matching domains.
+    """
+    name                 = models.CharField(max_length=255, unique=True)
+    allowed_email_domain = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering  = ["name"]
+        db_table  = "accounts_organization"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_open(self):
+        return not self.allowed_email_domain
+
+
 class UserProfile(models.Model):
     """
     Stores analytics-specific role and organisation for each Identity.

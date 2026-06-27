@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework import status
 
-from .models import Identity, UserProfile
+from .models import Identity, Organization, UserProfile
 
 
 @api_view(["POST"])
@@ -46,8 +46,19 @@ def signup_view(request):
     if not email or not password:
         return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not organization:
-        return Response({"detail": "Organization is required."}, status=status.HTTP_400_BAD_REQUEST)
+    # Validate org + email-domain restriction (org is optional)
+    if organization:
+        try:
+            org_obj = Organization.objects.get(name=organization)
+        except Organization.DoesNotExist:
+            return Response({"detail": "Invalid organisation."}, status=status.HTTP_400_BAD_REQUEST)
+        if org_obj.allowed_email_domain:
+            email_domain = email.split("@")[-1].lower()
+            if email_domain != org_obj.allowed_email_domain.lower():
+                return Response(
+                    {"detail": f"This organisation requires an @{org_obj.allowed_email_domain} email address."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
     try:
         validate_password(password)
@@ -77,17 +88,9 @@ def me_view(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def organizations_view(request):
-    """Return sorted distinct organization values from patient_info for the signup dropdown."""
-    from patients.models import PatientInfo
-    orgs = (
-        PatientInfo.objects
-        .exclude(organization__isnull=True)
-        .exclude(organization="")
-        .values_list("organization", flat=True)
-        .distinct()
-        .order_by("organization")
-    )
-    return Response(list(orgs))
+    """Return alphabetical org names from the Organization table for the signup dropdown."""
+    orgs = list(Organization.objects.values_list("name", flat=True))
+    return Response(orgs)
 
 
 def _user_data(user):

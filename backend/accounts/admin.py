@@ -1,9 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 
-from .models import UserProfile
+from .models import Organization, UserProfile
 
 Identity = get_user_model()
+
+
+@admin.register(Organization)
+class OrganizationAdmin(admin.ModelAdmin):
+    list_display  = ["name", "allowed_email_domain"]
+    list_editable = ["allowed_email_domain"]
+    search_fields = ["name", "allowed_email_domain"]
+    ordering      = ["name"]
 
 
 @admin.register(UserProfile)

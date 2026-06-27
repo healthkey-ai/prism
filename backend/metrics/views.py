@@ -7,6 +7,7 @@ from cohorts.filters import apply_cohort_filters
 from metrics.services import (
     response_rates,
     treatment_patterns,
+    treatment_pathways,
     demographics,
     staging,
     labs,
@@ -36,6 +37,7 @@ def metrics(request):
         "cohort":              {"count": count},
         "response_rates":      response_rates.compute(qs),
         "treatment_patterns":  treatment_patterns.compute(qs),
+        "treatment_pathways":  treatment_pathways.compute(qs),
         "demographics":        demographics.compute(qs),
         "staging":             staging.compute(qs),
         "labs":                labs.compute(qs),
