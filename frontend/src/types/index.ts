@@ -181,6 +181,18 @@ export interface MetricsResponse {
     name: string
     children: PathwayNode[]
   }
+  pathway_sunburst?: {
+    total: number
+    children: {
+      name: string
+      count: number
+      children: {
+        name: string
+        count: number
+        children: { name: string; count: number }[]
+      }[]
+    }[]
+  }
 }
 
 export interface SurvivalLine {
