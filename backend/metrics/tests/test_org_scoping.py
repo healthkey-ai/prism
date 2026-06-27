@@ -38,7 +38,7 @@ def test_user_role_scoped_to_org():
     user = _make_user(UserProfile.ROLE_USER, organization='Org A')
     scoped_qs, err = _apply_org_scope(qs, user)
     assert err is None
-    qs.filter.assert_called_once_with(organization='Org A')
+    qs.filter.assert_called_once_with(organization__name='Org A')
 
 
 def test_user_with_no_org_returns_403():
@@ -64,4 +64,4 @@ def test_premium_role_scoped_to_org():
     user = _make_user(UserProfile.ROLE_PREMIUM, organization='Cancer Center')
     scoped_qs, err = _apply_org_scope(qs, user)
     assert err is None
-    qs.filter.assert_called_once_with(organization='Cancer Center')
+    qs.filter.assert_called_once_with(organization__name='Cancer Center')

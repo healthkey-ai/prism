@@ -132,8 +132,14 @@ class PatientInfo(models.Model):
     supportive_therapies = models.TextField(null=True)
     supportive_therapy_start_date = models.DateField(null=True)
 
-    # site / organisation
-    organization = models.CharField(max_length=255, null=True, blank=True)
+    # site / organisation — FK to the source organization table
+    organization = models.ForeignKey(
+        SourceOrganization,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="organization_id",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
