@@ -11,6 +11,7 @@ export default function LoginPage({ auth }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [organization, setOrganization] = useState('')
   const [organizations, setOrganizations] = useState<string[]>([])
   const [orgsLoading, setOrgsLoading] = useState(false)
@@ -35,6 +36,10 @@ export default function LoginPage({ auth }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    if (mode === 'signup' && password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
     setSubmitting(true)
     try {
       if (mode === 'login') {
@@ -63,7 +68,7 @@ export default function LoginPage({ auth }: Props) {
             {(['login', 'signup'] as const).map(m => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setError('') }}
+                onClick={() => { setMode(m); setError(''); setConfirmPassword('') }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${
                   mode === m ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
@@ -110,6 +115,20 @@ export default function LoginPage({ auth }: Props) {
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
               />
             </div>
+
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            )}
 
             {mode === 'signup' && (
               <div>
