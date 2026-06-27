@@ -217,8 +217,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Frontend build output
-frontend/dist/
+# Frontend build output — hashed JS/CSS assets and index.html are committed so
+# Render can serve them without a separate build step. Source maps excluded.
+frontend/dist/**/*.map
 
 # macOS
 .DS_Store
