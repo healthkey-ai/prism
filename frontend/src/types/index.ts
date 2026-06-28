@@ -177,10 +177,6 @@ export interface MetricsResponse {
     first_line:  SurvivalLine
     second_line: SurvivalLine
   }
-  treatment_pathways?: {
-    name: string
-    children: PathwayNode[]
-  }
   pathway_sunburst?: {
     total: number
     children: {
@@ -218,8 +214,3 @@ export interface SwitchingRow {
   switches: { to_regimen: string; n: number; pct: number }[]
 }
 
-export interface PathwayNode {
-  name: string
-  value?: number
-  children?: PathwayNode[]
-}

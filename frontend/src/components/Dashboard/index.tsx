@@ -15,7 +15,6 @@ import Switching from '../charts/Switching'
 import SubgroupSurvival from '../charts/SubgroupSurvival'
 import PathwaySunburst from '../charts/PathwaySunburst'
 import DurationOfResponse from '../charts/DurationOfResponse'
-import TreatmentPathwaysSunburst from '../charts/TreatmentPathwaysSunburst'
 import TreatmentSankey from '../charts/TreatmentSankey'
 import api from '../../api/client'
 
@@ -250,8 +249,8 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Pathway Sunburst</h3>
-                  {metrics?.treatment_pathways
-                    ? <TreatmentPathwaysSunburst data={metrics.treatment_pathways} />
+                  {metrics?.pathway_sunburst
+                    ? <PathwaySunburst data={metrics.pathway_sunburst} />
                     : <NoDataPlaceholder />}
                 </div>
                 <div>
@@ -296,11 +295,6 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               </MetricCard>
             </div>
 
-            <MetricCard title="Treatment Pathways">
-              {metrics?.pathway_sunburst
-                ? <PathwaySunburst data={metrics.pathway_sunburst} />
-                : <NoDataPlaceholder />}
-            </MetricCard>
           </>
         ) : (
           <>
