@@ -16,6 +16,7 @@ import SubgroupSurvival from '../charts/SubgroupSurvival'
 import PathwaySunburst from '../charts/PathwaySunburst'
 import DurationOfResponse from '../charts/DurationOfResponse'
 import TreatmentSankey from '../charts/TreatmentSankey'
+import ForestPlot from '../charts/ForestPlot'
 import api from '../../api/client'
 
 interface Props {
@@ -240,6 +241,10 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
             <MetricCard title="Duration of Response (DOR)">
               {metrics?.dor ? <DurationOfResponse data={metrics.dor} /> : <NoDataPlaceholder />}
+            </MetricCard>
+
+            <MetricCard title="Subgroup Forest Plot — Overall Survival">
+              <ForestPlot data={metrics?.forest_plot ?? []} />
             </MetricCard>
           </>
         ) : tab === 'treatments' ? (

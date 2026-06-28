@@ -189,6 +189,19 @@ export interface MetricsResponse {
       }[]
     }[]
   }
+  forest_plot?: ForestPlotRow[]
+}
+
+export interface ForestPlotRow {
+  subgroup: string
+  comparison: string
+  reference: string
+  n_comparison: number
+  n_reference: number
+  hr: number
+  ci_low: number
+  ci_high: number
+  p_value: number
 }
 
 export interface SurvivalLine {

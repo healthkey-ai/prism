@@ -17,6 +17,7 @@ from metrics.services import (
     subgroup_survival,
     pathway_sunburst,
     dor,
+    forest_plot,
 )
 
 
@@ -47,4 +48,5 @@ def metrics(request):
         "subgroup_survival":   subgroup_survival.compute(qs),
         "pathway_sunburst":    pathway_sunburst.compute(qs),
         "dor":                 dor.compute(qs),
+        "forest_plot":         forest_plot.compute(qs),
     })
