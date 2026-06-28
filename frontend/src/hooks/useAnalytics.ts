@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchFormSettings, fetchMetrics } from '../api/client'
 import type { CohortFilters, FormSettings, MetricsResponse } from '../types'
 
-const DEFAULT_DISEASE = 'Multiple Myeloma'
+const DEFAULT_DISEASE = 'Breast Cancer'
 
 export function useAnalytics() {
   const [filters, setFilters] = useState<CohortFilters>({ disease: DEFAULT_DISEASE })
