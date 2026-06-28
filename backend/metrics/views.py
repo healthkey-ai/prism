@@ -18,7 +18,11 @@ from metrics.services import (
     pathway_sunburst,
     dor,
     forest_plot,
+    cohort_characterization,
+    incidence,
+    time_to_treatment,
 )
+from metrics.services.survival import landmark_os_km
 
 
 @api_view(["GET"])
@@ -46,7 +50,11 @@ def metrics(request):
         "ttnt":                ttnt.compute(qs),
         "switching":           switching.compute(qs),
         "subgroup_survival":   subgroup_survival.compute(qs),
-        "pathway_sunburst":    pathway_sunburst.compute(qs),
-        "dor":                 dor.compute(qs),
-        "forest_plot":         forest_plot.compute(qs),
+        "pathway_sunburst":          pathway_sunburst.compute(qs),
+        "dor":                       dor.compute(qs),
+        "forest_plot":               forest_plot.compute(qs),
+        "cohort_characterization":   cohort_characterization.compute(qs),
+        "incidence":                 incidence.compute(qs),
+        "time_to_treatment":         time_to_treatment.compute(qs),
+        "landmark_survival":         landmark_os_km(qs),
     })

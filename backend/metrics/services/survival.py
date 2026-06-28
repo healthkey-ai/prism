@@ -133,6 +133,25 @@ def efs_km(qs):
     return _km_result(times_events)
 
 
+# ── Landmark OS ───────────────────────────────────────────────────────────────
+
+def landmark_os_km(qs, landmark_months=6.0):
+    """
+    Landmark OS: restrict to patients who survived past the landmark, then run
+    KM from that point forward (time shifted). Removes early-death selection bias.
+    Default landmark is 6 months.
+    """
+    all_te = _os_times_events(qs)
+    shifted = [
+        (round(t - landmark_months, 1), event)
+        for t, event in all_te
+        if t > landmark_months
+    ]
+    result = _km_result(shifted)
+    result["landmark_months"] = landmark_months
+    return result
+
+
 # ── public interface ──────────────────────────────────────────────────────────
 
 def compute(qs):

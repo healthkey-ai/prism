@@ -190,6 +190,19 @@ export interface MetricsResponse {
     }[]
   }
   forest_plot?: ForestPlotRow[]
+  cohort_characterization?: {
+    n: number
+    demographics?: { age_median: number|null; age_q1: number|null; age_q3: number|null; female_n: number; female_pct: number|null }
+    receptor_status?: { er_positive_n: number; er_positive_pct: number|null; er_tested: number; her2_positive_n: number; her2_positive_pct: number|null; her2_tested: number; tnbc_n: number; tnbc_pct: number|null; tnbc_tested: number }
+    stages?: { stage: string; n: number; pct: number|null }[]
+    ecog?: { score: number; n: number; pct: number|null }[]
+    treatment?: { received_2l_n: number; received_2l_pct: number|null; received_3l_n: number; received_3l_pct: number|null }
+    mrd?: { negative_n: number; negative_pct: number|null; positive_n: number; positive_pct: number|null; tested: number }
+    labs?: { hemoglobin_median: number|null; hemoglobin_q1: number|null; hemoglobin_q3: number|null; creatinine_median: number|null; creatinine_q1: number|null; creatinine_q3: number|null; b2m_median: number|null; b2m_q1: number|null; b2m_q3: number|null }
+  }
+  incidence?: { quarter: string; diagnoses: number; treatment_starts: number }[]
+  time_to_treatment?: { median_days: number|null; n: number; histogram: { label: string; count: number; lo: number; hi: number|null }[] }
+  landmark_survival?: { curve: { time: number; survival: number; at_risk: number }[]; n: number; median: number|null; landmark_months: number }
 }
 
 export interface ForestPlotRow {
