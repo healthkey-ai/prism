@@ -39,7 +39,7 @@ def apply_cohort_filters(request) -> "QuerySet[PatientInfo]":
     # ── disease ───────────────────────────────────────────────────────────────
     disease = p.get("disease")
     if disease:
-        qs = qs.filter(disease=disease)
+        qs = qs.filter(disease__icontains=disease)
 
     # ── ISS / TNM stage ───────────────────────────────────────────────────────
     stages = _list("stage")

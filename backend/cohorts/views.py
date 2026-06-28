@@ -126,19 +126,25 @@ def form_settings(request):
     disease_config = THERAPY_MAP.get(disease, THERAPY_MAP["Multiple Myeloma"])
 
     # Pull distinct values actually present in the DB for this disease
-    qs = PatientInfo.objects.filter(disease=disease)
+    qs = PatientInfo.objects.filter(disease__icontains=disease)
     regions = sorted(
         qs.exclude(region__isnull=True).values_list("region", flat=True).distinct()
     )
     races = sorted(
         qs.exclude(race__isnull=True).values_list("race", flat=True).distinct()
     )
-    diseases = list(
+    def _normalize_disease(name):
+        """Collapse FHIR coding artifacts (e.g. 'ER|ERBB2 Breast cancer') into canonical names."""
+        if "breast cancer" in name.lower():
+            return "Breast Cancer"
+        return name
+
+    raw_diseases = (
         PatientInfo.objects.exclude(disease__isnull=True)
         .values_list("disease", flat=True)
         .distinct()
-        .order_by("disease")
     )
+    diseases = sorted(set(_normalize_disease(d) for d in raw_diseases))
 
     return Response({
         "diseases": diseases,
