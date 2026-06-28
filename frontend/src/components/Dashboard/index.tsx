@@ -16,6 +16,10 @@ import SubgroupSurvival from '../charts/SubgroupSurvival'
 import PathwaySunburst from '../charts/PathwaySunburst'
 import DurationOfResponse from '../charts/DurationOfResponse'
 import TreatmentSankey from '../charts/TreatmentSankey'
+import ForestPlot from '../charts/ForestPlot'
+import CohortCharacterization from '../charts/CohortCharacterization'
+import IncidenceChart from '../charts/IncidenceChart'
+import TimeToTreatment from '../charts/TimeToTreatment'
 import api from '../../api/client'
 
 interface Props {
@@ -214,6 +218,16 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 : <NoDataPlaceholder />}
             </MetricCard>
 
+            {metrics?.landmark_survival && metrics.landmark_survival.n > 0 && (
+              <MetricCard title={`Landmark Overall Survival (${metrics.landmark_survival.landmark_months}-month landmark, n = ${metrics.landmark_survival.n})`}>
+                <SurvivalCurves data={{
+                  os:  metrics.landmark_survival,
+                  pfs: { curve: [], n: 0, median: null },
+                  efs: { curve: [], n: 0, median: null },
+                }} />
+              </MetricCard>
+            )}
+
             <MetricCard title="Response Rates">
               <div className="flex gap-1 rounded-lg border border-gray-200 p-0.5 bg-gray-50 w-fit mb-4">
                 {(['1L', '2L', '3L+'] as ResponseLineTab[]).map((t) => (
@@ -240,6 +254,10 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
             <MetricCard title="Duration of Response (DOR)">
               {metrics?.dor ? <DurationOfResponse data={metrics.dor} /> : <NoDataPlaceholder />}
+            </MetricCard>
+
+            <MetricCard title="Subgroup Forest Plot — Overall Survival">
+              <ForestPlot data={metrics?.forest_plot ?? []} />
             </MetricCard>
           </>
         ) : tab === 'treatments' ? (
@@ -285,6 +303,12 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               </MetricCard>
             </div>
 
+            <MetricCard title="Time to First Treatment">
+              {metrics?.time_to_treatment
+                ? <TimeToTreatment data={metrics.time_to_treatment} />
+                : <NoDataPlaceholder />}
+            </MetricCard>
+
             {/* TTNT + Switching */}
             <div className="grid grid-cols-2 gap-6">
               <MetricCard title="Time to Next Treatment (TTNT)">
@@ -298,6 +322,18 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           </>
         ) : (
           <>
+            {metrics?.cohort_characterization && metrics.cohort_characterization.n > 0 && (
+              <MetricCard title="Cohort Characterization (Table 1)">
+                <CohortCharacterization data={metrics.cohort_characterization} />
+              </MetricCard>
+            )}
+
+            <MetricCard title="New Diagnoses &amp; Treatment Starts Over Time">
+              {metrics?.incidence && metrics.incidence.length > 0
+                ? <IncidenceChart data={metrics.incidence} />
+                : <NoDataPlaceholder />}
+            </MetricCard>
+
             <MetricCard title="Patient Demographics">
               {metrics?.demographics ? <Demographics data={metrics.demographics} /> : <NoDataPlaceholder />}
             </MetricCard>

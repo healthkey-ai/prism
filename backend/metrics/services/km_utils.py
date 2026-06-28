@@ -63,6 +63,54 @@ def km_result(times_events):
     return {"curve": curve, "n": len(times_events), "median": km_median(curve)}
 
 
+def log_rank_hr(te1, te2):
+    """
+    Peto HR and 95% CI for te1 (comparison) vs te2 (reference).
+    HR < 1 means te1 has better survival than te2.
+    Returns (hr, ci_low, ci_high, p_value) rounded, or None if not computable.
+    """
+    if not te1 or not te2:
+        return None
+
+    event_times = sorted({round(dur, 1) for te in (te1, te2) for dur, ev in te if ev})
+    if not event_times:
+        return None
+
+    O1 = 0.0
+    E1 = 0.0
+    V  = 0.0
+
+    for t in event_times:
+        n1 = sum(1 for dur, _ in te1 if round(dur, 1) >= t)
+        n2 = sum(1 for dur, _ in te2 if round(dur, 1) >= t)
+        d1 = sum(1 for dur, ev in te1 if round(dur, 1) == t and ev)
+        d2 = sum(1 for dur, ev in te2 if round(dur, 1) == t and ev)
+        n  = n1 + n2
+        d  = d1 + d2
+        if n <= 1 or d == 0:
+            continue
+        O1 += d1
+        E1 += n1 * d / n
+        if d < n:
+            V += n1 * n2 * d * (n - d) / (n * n * (n - 1))
+
+    if V <= 0 or E1 <= 0:
+        return None
+
+    log_hr = (O1 - E1) / V
+    hr     = math.exp(log_hr)
+    se     = 1.0 / math.sqrt(V)
+    chi2   = (O1 - E1) ** 2 / V
+    p      = float(stats.chi2.sf(chi2, df=1))
+
+    return (
+        round(hr,       2),
+        round(math.exp(log_hr - 1.96 * se), 2),
+        round(math.exp(log_hr + 1.96 * se), 2),
+        round(p, 4),
+    )
+
+
 def log_rank_p(groups_te):
     """
     Generalized K-group log-rank test.
