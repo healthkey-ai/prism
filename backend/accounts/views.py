@@ -96,7 +96,14 @@ def organizations_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def my_orgs_view(request):
-    """Return org options visible to the current user."""
+    """Return org options visible to the current user.
+
+    Currently gates multi-org visibility on ROLE_STAFF.
+    TODO: extend to support trusted organisations (e.g. HealthTree Trust) that
+    have cross-org read access without requiring ROLE_STAFF — requires a
+    `can_access_all_orgs` flag on the Organization model (or a trusted-org
+    M2M relationship on UserProfile) and a corresponding update to apply_org_scope.
+    """
     from patients.models import PatientInfo
 
     try:

@@ -34,7 +34,9 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
   const [orgOptions, setOrgOptions] = useState<{ value: string; label: string }[]>([])
 
   useEffect(() => {
-    fetchMyOrgs().then(setOrgOptions).catch(() => {})
+    fetchMyOrgs().then(setOrgOptions).catch((err) => {
+      console.error('Failed to load org options', err)
+    })
   }, [])
 
   function handleLoadCohort(f: CohortFilters, cohortId?: number, cohortName?: string) {
