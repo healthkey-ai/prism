@@ -33,12 +33,13 @@ def test_staff_sees_all_orgs():
     assert scoped_qs is qs
 
 
-def test_user_role_scoped_to_org():
+@patch('accounts.utils.get_visible_org_names', return_value=['Org A'])
+def test_user_role_scoped_to_org(mock_visible):
     qs = _make_qs()
     user = _make_user(UserProfile.ROLE_USER, organization='Org A')
     scoped_qs, err = _apply_org_scope(qs, user)
     assert err is None
-    qs.filter.assert_called_once_with(organization__name='Org A')
+    qs.filter.assert_called_once_with(organization__in=['Org A'])
 
 
 def test_user_with_no_org_returns_403():
@@ -59,9 +60,22 @@ def test_no_profile_returns_403():
     assert err.status_code == 403
 
 
-def test_premium_role_scoped_to_org():
+@patch('accounts.utils.get_visible_org_names', return_value=['Cancer Center'])
+def test_premium_role_scoped_to_org(mock_visible):
     qs = _make_qs()
     user = _make_user(UserProfile.ROLE_PREMIUM, organization='Cancer Center')
     scoped_qs, err = _apply_org_scope(qs, user)
     assert err is None
-    qs.filter.assert_called_once_with(organization__name='Cancer Center')
+    qs.filter.assert_called_once_with(organization__in=['Cancer Center'])
+
+
+@patch('accounts.utils.get_visible_org_names', return_value=['HealthTree Trust', 'Hospital A', 'Hospital B'])
+def test_multi_org_trust_scoped_to_all_visible(mock_visible):
+    """A trusted org user gets data filtered to all their accessible orgs."""
+    qs = _make_qs()
+    user = _make_user(UserProfile.ROLE_USER, organization='HealthTree Trust')
+    scoped_qs, err = _apply_org_scope(qs, user)
+    assert err is None
+    qs.filter.assert_called_once_with(
+        organization__in=['HealthTree Trust', 'Hospital A', 'Hospital B']
+    )

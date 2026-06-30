@@ -98,13 +98,12 @@ def organizations_view(request):
 def my_orgs_view(request):
     """Return org options visible to the current user.
 
-    Currently gates multi-org visibility on ROLE_STAFF.
-    TODO: extend to support trusted organisations (e.g. HealthTree Trust) that
-    have cross-org read access without requiring ROLE_STAFF — requires a
-    `can_access_all_orgs` flag on the Organization model (or a trusted-org
-    M2M relationship on UserProfile) and a corresponding update to apply_org_scope.
+    Staff: all distinct orgs present in PatientInfo.
+    Others: their own org plus any org that has granted trust to their org
+            (or email domain) via PROMOP's OrgTrust table.
     """
     from patients.models import PatientInfo
+    from accounts.utils import get_visible_org_names
 
     try:
         profile = request.user.profile
@@ -122,10 +121,8 @@ def my_orgs_view(request):
         )
         return Response([{"value": o, "label": o} for o in orgs])
 
-    if profile.organization:
-        return Response([{"value": profile.organization, "label": profile.organization}])
-
-    return Response([])
+    visible = get_visible_org_names(request.user)
+    return Response([{"value": o, "label": o} for o in visible])
 
 
 def _user_data(user):
