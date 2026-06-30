@@ -83,7 +83,7 @@ export async function fetchOrganizations(): Promise<string[]> {
 }
 
 export async function fetchMyOrgs(): Promise<{ value: string; label: string }[]> {
-  const { data } = await api.get('/auth/my-orgs/')
+  const { data } = await api.get<{ value: string; label: string }[]>('/auth/my-orgs/')
   return data
 }
 

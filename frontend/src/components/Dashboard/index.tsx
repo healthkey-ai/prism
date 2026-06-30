@@ -172,27 +172,38 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               ))}
             </select>
 
-            {/* Disease */}
+            {/* Disease — no 'All diseases' option; cross-disease cohorts are clinically meaningless */}
             <select
               value={filters.disease ?? ''}
-              onChange={e => onUpdateFilter('disease', e.target.value || undefined)}
+              onChange={e => {
+                onUpdateFilter('disease', e.target.value || undefined)
+                // Clear stage whenever disease changes — stage options are disease-specific
+                onUpdateFilter('stage', undefined)
+              }}
               className={SELECT_CLS}
             >
-              <option value="">All diseases</option>
               {diseaseOptions.map(d => (
                 <option key={d} value={d}>{d}</option>
               ))}
             </select>
 
-            {/* Stage */}
+            {/* Stage — disabled when CohortPanel has a multi-stage selection to prevent silent clobber */}
             <select
-              value={filters.stage?.[0] ?? ''}
+              value={
+                (filters.stage?.length ?? 0) > 1
+                  ? '__multiple__'
+                  : filters.stage?.[0] ?? ''
+              }
+              disabled={(filters.stage?.length ?? 0) > 1}
               onChange={e => {
                 const val = e.target.value
                 onUpdateFilter('stage', val ? [val] : undefined)
               }}
               className={SELECT_CLS}
             >
+              {(filters.stage?.length ?? 0) > 1 && (
+                <option value="__multiple__">Multiple stages selected</option>
+              )}
               <option value="">All stages</option>
               {stageOptions.map(s => (
                 <option key={s} value={s}>{s}</option>

@@ -213,6 +213,9 @@ def apply_cohort_filters(request) -> "QuerySet[PatientInfo]":
         qs = qs.filter(tnbc_status=tnbc)
 
     # ── organization ──────────────────────────────────────────────────────────
+    # Note: this filter is meaningful only for staff (and future trusted-org) users.
+    # For regular users, apply_org_scope (called in the view layer) enforces row-level
+    # org isolation via an exact-match filter regardless of what org= is passed here.
     org = p.get("org")
     if org:
         qs = qs.filter(organization__iexact=org)
