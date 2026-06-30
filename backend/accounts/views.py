@@ -114,10 +114,9 @@ def my_orgs_view(request):
         orgs = (
             PatientInfo.objects
             .exclude(organization__isnull=True)
-            .exclude(organization="")
-            .values_list("organization", flat=True)
+            .values_list("organization__name", flat=True)
             .distinct()
-            .order_by("organization")
+            .order_by("organization__name")
         )
         return Response([{"value": o, "label": o} for o in orgs])
 

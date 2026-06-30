@@ -91,4 +91,4 @@ def apply_org_scope(qs, user):
     if not visible:
         return None, _NO_ORG_RESPONSE
 
-    return qs.filter(organization__in=visible), None
+    return qs.filter(organization__name__in=visible), None
