@@ -1,4 +1,7 @@
+import datetime
+
 from django.db.models import Q
+from django.utils import timezone
 from patients.models import PatientInfo
 from metrics.services.clinical_filters import HIGH_RISK_CYTO, HAS_SCT, NO_SCT
 
@@ -208,5 +211,23 @@ def apply_cohort_filters(request) -> "QuerySet[PatientInfo]":
     tnbc = _bool("tnbc_status")
     if tnbc is not None:
         qs = qs.filter(tnbc_status=tnbc)
+
+    # ── organization ──────────────────────────────────────────────────────────
+    org = p.get("org")
+    if org:
+        qs = qs.filter(organization__iexact=org)
+
+    # ── diagnosis date window ─────────────────────────────────────────────────
+    date_window = p.get("date")
+    if date_window:
+        now = timezone.now().date()
+        if date_window == "7d":
+            qs = qs.filter(diagnosis_date__gte=now - datetime.timedelta(days=7))
+        elif date_window == "30d":
+            qs = qs.filter(diagnosis_date__gte=now - datetime.timedelta(days=30))
+        elif date_window == "90d":
+            qs = qs.filter(diagnosis_date__gte=now - datetime.timedelta(days=90))
+        elif date_window == "this_year":
+            qs = qs.filter(diagnosis_date__year=now.year)
 
     return qs

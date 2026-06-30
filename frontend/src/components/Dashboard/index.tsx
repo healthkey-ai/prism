@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import type { MetricsResponse, User } from '../../types'
+import type { CohortFilters, MetricsResponse, User } from '../../types'
 import MetricCard from '../ui/MetricCard'
 import ResponseRates from '../charts/ResponseRates'
 import TreatmentPatterns from '../charts/TreatmentPatterns'
@@ -29,7 +29,22 @@ interface Props {
   user: User
   onLogout: () => void
   activeSavedCohortId: number | null
+  filters: CohortFilters
+  onUpdateFilter: <K extends keyof CohortFilters>(key: K, val: CohortFilters[K]) => void
+  orgOptions: { value: string; label: string }[]
+  stageOptions?: string[]
+  diseaseOptions?: string[]
 }
+
+const DATE_OPTIONS = [
+  { value: '',          label: 'All dates' },
+  { value: '7d',        label: 'Last 7 days' },
+  { value: '30d',       label: 'Last 30 days' },
+  { value: '90d',       label: 'Last 90 days' },
+  { value: 'this_year', label: 'This year' },
+]
+
+const SELECT_CLS = 'h-9 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-700 w-full focus:outline-none focus:ring-1 focus:ring-teal-500'
 
 type DashboardTab    = 'outcomes' | 'treatments' | 'profile'
 type ResponseLineTab = '1L' | '2L' | '3L+'
@@ -56,7 +71,7 @@ function NoDataPlaceholder() {
   )
 }
 
-export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId }: Props) {
+export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId, filters, onUpdateFilter, orgOptions, stageOptions = [], diseaseOptions = [] }: Props) {
   const canExport = (user.role ?? 'user') === 'premium' || (user.role ?? 'user') === 'staff'
   const [tab, setTab]                 = useState<DashboardTab>('outcomes')
   const [responseTab, setResponseTab] = useState<ResponseLineTab>('1L')
@@ -118,30 +133,88 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
       {loading && <Spinner />}
 
       {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-gray-900">{disease} Analytics</h1>
-          {metrics && (
-            <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-0.5 text-sm font-semibold text-teal-700 border border-teal-200">
-              {cohortCount.toLocaleString()} patients
-            </span>
-          )}
+      <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+        {/* Title row */}
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-bold text-gray-900">{disease} Analytics</h1>
+            {metrics && (
+              <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-0.5 text-sm font-semibold text-teal-700 border border-teal-200">
+                {cohortCount.toLocaleString()} patients
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {/* User + logout */}
+            <span className="text-sm text-gray-500">{user.name || user.email}</span>
+            <button
+              onClick={onLogout}
+              className="text-sm text-gray-400 hover:text-red-500 transition-colors"
+              title="Sign out"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {/* User + logout */}
-          <span className="text-sm text-gray-500">{user.name || user.email}</span>
-          <button
-            onClick={onLogout}
-            className="text-sm text-gray-400 hover:text-red-500 transition-colors"
-            title="Sign out"
-          >
-            Sign out
-          </button>
+
+        {/* Filter selection bar */}
+        <div className="border-t border-gray-100 px-6 py-2">
+          <div className="grid grid-cols-4 gap-3 max-w-[1400px] mx-auto">
+            {/* Org */}
+            <select
+              value={filters.org ?? ''}
+              onChange={e => onUpdateFilter('org', e.target.value || undefined)}
+              className={SELECT_CLS}
+            >
+              <option value="">All orgs</option>
+              {orgOptions.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+
+            {/* Disease */}
+            <select
+              value={filters.disease ?? ''}
+              onChange={e => onUpdateFilter('disease', e.target.value || undefined)}
+              className={SELECT_CLS}
+            >
+              <option value="">All diseases</option>
+              {diseaseOptions.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+
+            {/* Stage */}
+            <select
+              value={filters.stage?.[0] ?? ''}
+              onChange={e => {
+                const val = e.target.value
+                onUpdateFilter('stage', val ? [val] : undefined)
+              }}
+              className={SELECT_CLS}
+            >
+              <option value="">All stages</option>
+              {stageOptions.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            {/* Date */}
+            <select
+              value={filters.date ?? ''}
+              onChange={e => onUpdateFilter('date', e.target.value || undefined)}
+              className={SELECT_CLS}
+            >
+              {DATE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </header>
 
       {/* Tab bar */}
-      <div className="sticky top-[73px] z-10 bg-white border-b border-gray-200 px-6">
+      <div className="sticky top-[120px] z-10 bg-white border-b border-gray-200 px-6">
         <div className="flex items-center justify-between max-w-[1400px] mx-auto">
           <div className="flex">
             {TABS.map(({ id, label }) => (

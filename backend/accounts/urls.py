@@ -7,4 +7,5 @@ urlpatterns = [
     path("signup/", views.signup_view),
     path("user/", views.me_view),
     path("organizations/", views.organizations_view),
+    path("my-orgs/", views.my_orgs_view),
 ]
