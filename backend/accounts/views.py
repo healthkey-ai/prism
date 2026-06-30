@@ -93,6 +93,34 @@ def organizations_view(request):
     return Response(orgs)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_orgs_view(request):
+    """Return org options visible to the current user."""
+    from patients.models import PatientInfo
+
+    try:
+        profile = request.user.profile
+    except UserProfile.DoesNotExist:
+        return Response([])
+
+    if profile.role == UserProfile.ROLE_STAFF:
+        orgs = (
+            PatientInfo.objects
+            .exclude(organization__isnull=True)
+            .exclude(organization="")
+            .values_list("organization", flat=True)
+            .distinct()
+            .order_by("organization")
+        )
+        return Response([{"value": o, "label": o} for o in orgs])
+
+    if profile.organization:
+        return Response([{"value": profile.organization, "label": profile.organization}])
+
+    return Response([])
+
+
 def _user_data(user):
     try:
         profile = user.profile

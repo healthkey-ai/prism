@@ -82,6 +82,11 @@ export async function fetchOrganizations(): Promise<string[]> {
   return data
 }
 
+export async function fetchMyOrgs(): Promise<{ value: string; label: string }[]> {
+  const { data } = await api.get('/auth/my-orgs/')
+  return data
+}
+
 // Saved cohorts
 export async function fetchSavedCohorts(): Promise<SavedCohort[]> {
   const { data } = await api.get<SavedCohort[]>('/cohorts/saved/')

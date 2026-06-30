@@ -53,6 +53,8 @@ export interface CohortFilters {
   er_status?: string[]
   her2_status?: string[]
   tnbc_status?: boolean
+  org?: string
+  date?: string
 }
 
 export interface FormSettings {

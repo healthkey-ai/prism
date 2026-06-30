@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import CohortPanel from './components/CohortPanel'
 import Dashboard from './components/Dashboard'
 import LoginPage from './components/Auth/LoginPage'
@@ -6,6 +6,7 @@ import { useAnalytics } from './hooks/useAnalytics'
 import { useAuth } from './hooks/useAuth'
 import type { AuthState } from './hooks/useAuth'
 import type { CohortFilters } from './types'
+import { fetchMyOrgs } from './api/client'
 
 export default function App() {
   const auth = useAuth()
@@ -30,6 +31,11 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
   const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
   const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
   const [cohortDirty, setCohortDirty] = useState(false)
+  const [orgOptions, setOrgOptions] = useState<{ value: string; label: string }[]>([])
+
+  useEffect(() => {
+    fetchMyOrgs().then(setOrgOptions).catch(() => {})
+  }, [])
 
   function handleLoadCohort(f: CohortFilters, cohortId?: number, cohortName?: string) {
     setFilters(f)
@@ -71,6 +77,11 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
           user={auth.user!}
           onLogout={auth.logout}
           activeSavedCohortId={activeSavedCohortId}
+          filters={filters}
+          onUpdateFilter={handleUpdateFilter}
+          orgOptions={orgOptions}
+          stageOptions={settings?.stages ?? []}
+          diseaseOptions={settings?.diseases ?? []}
         />
       </main>
     </div>
