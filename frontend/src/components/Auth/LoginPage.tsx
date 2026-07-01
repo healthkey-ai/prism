@@ -112,6 +112,17 @@ export default function LoginPage({ auth }: Props) {
             )}
 
 
+            {mode === 'signup' && (
+              <p className="text-xs text-slate-400 leading-relaxed">
+                This platform provides analytics on a set of synthetic data from fictional foundations for demonstration purposes.
+                For questions, contact{' '}
+                <a href="mailto:support@healthkey.ai" className="text-teal-400 hover:text-teal-300 underline">
+                  support@healthkey.ai
+                </a>
+                .
+              </p>
+            )}
+
             {error && (
               <p className="text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
                 {error}
