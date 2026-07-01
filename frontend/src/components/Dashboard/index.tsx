@@ -58,6 +58,7 @@ function NoDataPlaceholder() {
 
 export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId }: Props) {
   const canExport = (user.role ?? 'user') === 'premium' || (user.role ?? 'user') === 'staff'
+  const isMultipleMyeloma = disease === 'Multiple Myeloma'
   const [tab, setTab]                 = useState<DashboardTab>('outcomes')
   const [responseTab, setResponseTab] = useState<ResponseLineTab>('1L')
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -219,14 +220,16 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               {metrics?.survival ? <SurvivalCurves data={metrics.survival} /> : <NoDataPlaceholder />}
             </MetricCard>
 
-            <MetricCard
-              title="Survival by Subgroup"
-              description="Kaplan-Meier survival curves stratified by ISS disease stage, cytogenetic risk (high-risk vs. standard-risk), and SCT history. Patients without a cytogenetics workup are excluded from the risk subgroups. Enables side-by-side comparison of outcomes across biologically distinct patient populations."
-            >
-              {metrics?.subgroup_survival
-                ? <SubgroupSurvival data={metrics.subgroup_survival} />
-                : <NoDataPlaceholder />}
-            </MetricCard>
+            {isMultipleMyeloma && (
+              <MetricCard
+                title="Survival by Subgroup"
+                description="Kaplan-Meier survival curves stratified by ISS disease stage, cytogenetic risk (high-risk vs. standard-risk), and SCT history. Patients without a cytogenetics workup are excluded from the risk subgroups. Enables side-by-side comparison of outcomes across biologically distinct patient populations."
+              >
+                {metrics?.subgroup_survival
+                  ? <SubgroupSurvival data={metrics.subgroup_survival} />
+                  : <NoDataPlaceholder />}
+              </MetricCard>
+            )}
 
             {metrics?.landmark_survival && metrics.landmark_survival.n > 0 && (
               <MetricCard
@@ -275,12 +278,14 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               {metrics?.dor ? <DurationOfResponse data={metrics.dor} /> : <NoDataPlaceholder />}
             </MetricCard>
 
-            <MetricCard
-              title="Subgroup Forest Plot — Overall Survival"
-              description="Hazard ratios (HR) for overall survival across prespecified subgroups. Each row shows the HR and 95% confidence interval for a subgroup relative to its complement. An HR < 1 (left of center) indicates better survival in that subgroup. Wide confidence intervals reflect small sample sizes within the subgroup."
-            >
-              <ForestPlot data={metrics?.forest_plot ?? []} />
-            </MetricCard>
+            {isMultipleMyeloma && (
+              <MetricCard
+                title="Subgroup Forest Plot — Overall Survival"
+                description="Hazard ratios (HR) for overall survival across prespecified subgroups. Each row shows the HR and 95% confidence interval for a subgroup relative to its complement. An HR < 1 (left of center) indicates better survival in that subgroup. Wide confidence intervals reflect small sample sizes within the subgroup."
+              >
+                <ForestPlot data={metrics?.forest_plot ?? []} />
+              </MetricCard>
+            )}
           </>
         ) : tab === 'treatments' ? (
           <>
