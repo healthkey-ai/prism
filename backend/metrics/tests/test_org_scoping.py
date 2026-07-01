@@ -62,7 +62,8 @@ def test_user_with_no_org_sees_public_data_orgs(mock_visible):
     qs.filter.assert_called_once_with(organization__name__in=['ABC Foundation'])
 
 
-def test_no_profile_returns_403():
+@patch('accounts.utils.get_visible_org_names', return_value=[])
+def test_no_profile_returns_403(mock_visible):
     qs = _make_qs()
     user = _make_user(None, has_profile=False)
     scoped_qs, err = _apply_org_scope(qs, user)

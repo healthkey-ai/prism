@@ -1,6 +1,6 @@
 """Tests for get_visible_org_names — PROMOP org trust resolution."""
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 from accounts.models import UserProfile
 from accounts.utils import get_visible_org_names
 
@@ -26,14 +26,30 @@ def _promop_org(name, org_id=1):
     return org
 
 
+@pytest.fixture(autouse=True)
+def mock_group_access():
+    with patch('accounts.promop_models.PromopGroupAccess') as MockAccess:
+        active = MockAccess.objects.filter.return_value.filter.return_value
+        active.filter.return_value.values_list.return_value = []
+        yield MockAccess
+
+
 # ── no profile / no org ───────────────────────────────────────────────────────
 
-def test_no_profile_returns_empty():
+@patch('accounts.promop_models.PromopOrgTrust')
+@patch('accounts.promop_models.PromopOrganization')
+def test_no_profile_returns_empty(MockOrg, MockTrust):
+    MockOrg.objects.filter.return_value.values_list.return_value = []
+    MockTrust.objects.filter.return_value.values_list.return_value = []
     user = _make_user('', has_profile=False)
     assert get_visible_org_names(user) == []
 
 
-def test_no_org_returns_empty():
+@patch('accounts.promop_models.PromopOrgTrust')
+@patch('accounts.promop_models.PromopOrganization')
+def test_no_org_returns_empty(MockOrg, MockTrust):
+    MockOrg.objects.filter.return_value.values_list.return_value = []
+    MockTrust.objects.filter.return_value.values_list.return_value = []
     user = _make_user('')
     assert get_visible_org_names(user) == []
 
@@ -63,7 +79,7 @@ def test_org_to_org_trust_includes_granting_orgs(MockOrg, MockTrust):
     # Simulate two orgs that trust HealthTree Trust
     def trust_filter(**kwargs):
         qs = MagicMock()
-        if 'trusted_org' in kwargs:
+        if 'trusted_org__name__in' in kwargs:
             qs.values_list.return_value = ['Hospital A', 'Hospital B']
         else:
             qs.values_list.return_value = []
@@ -109,7 +125,7 @@ def test_domain_trust_includes_granting_org(MockOrg, MockTrust):
 
     def trust_filter(**kwargs):
         qs = MagicMock()
-        if 'trusted_org' in kwargs:
+        if 'trusted_org__name__in' in kwargs:
             qs.values_list.return_value = []
         else:
             # domain trust hit: @healthtree.org → Hospital C
@@ -144,6 +160,37 @@ def test_no_email_skips_domain_trust(MockOrg, MockTrust):
     user = _make_user('Clinic X', email='')
     get_visible_org_names(user)
     assert call_count['domain'] == 0  # domain path skipped when no email
+
+
+@patch('accounts.promop_models.PromopOrgTrust')
+@patch('accounts.promop_models.PromopOrganization')
+def test_promop_direct_org_grant_expands_trusted_orgs(MockOrg, MockTrust, mock_group_access):
+    active = mock_group_access.objects.filter.return_value.filter.return_value
+
+    def access_filter(**kwargs):
+        qs = MagicMock()
+        if kwargs.get('org__isnull') is False:
+            qs.values_list.return_value = ['HealthTree Trust']
+        else:
+            qs.values_list.return_value = []
+        return qs
+
+    active.filter.side_effect = access_filter
+
+    def trust_filter(**kwargs):
+        qs = MagicMock()
+        if kwargs.get('trusted_org__name__in') == ['HealthTree Trust']:
+            qs.values_list.return_value = ['ABC Foundation', 'BBC Foundation']
+        else:
+            qs.values_list.return_value = []
+        return qs
+
+    MockTrust.objects.filter.side_effect = trust_filter
+
+    user = _make_user('', email='adam@cancerbot.org')
+    result = get_visible_org_names(user)
+
+    assert result == ['ABC Foundation', 'BBC Foundation', 'HealthTree Trust']
 
 
 # ── deduplication ─────────────────────────────────────────────────────────────

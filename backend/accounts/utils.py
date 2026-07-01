@@ -1,4 +1,6 @@
 """Shared utilities for organisation-scoped querysets."""
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -27,38 +29,58 @@ def get_visible_org_names(user) -> list[str]:
     Do not call for ROLE_STAFF users — apply_org_scope handles that path
     by returning the queryset unmodified.
     """
-    from .promop_models import PromopOrganization, PromopOrgTrust
+    from .promop_models import PromopGroupAccess, PromopOrganization, PromopOrgTrust
 
     # Public orgs are visible to every authenticated user
     public_names: set[str] = set(
-        PromopOrganization.objects.filter(public_data=True, is_active=True)
+        PromopOrganization.objects.filter(
+            allows_public_aggregated_data=True,
+            is_active=True,
+        )
         .values_list("name", flat=True)
     )
+
+    now = timezone.now()
+    email = getattr(user, "email", "") or ""
+    access_identity_filter = Q(identity=user)
+    if email:
+        access_identity_filter |= Q(identity__email__iexact=email)
+
+    active_access = PromopGroupAccess.objects.filter(
+        access_identity_filter,
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+    )
+    direct_names = set(
+        active_access.filter(org__isnull=False, org__is_active=True)
+        .values_list("org__name", flat=True)
+    )
+    group_org_names = set(
+        active_access.filter(group__isnull=False, group__organization__is_active=True)
+        .values_list("group__organization__name", flat=True)
+    )
+
+    visible: set[str] = public_names | direct_names | group_org_names
 
     try:
         profile = user.profile
     except UserProfile.DoesNotExist:
-        return sorted(public_names)
+        profile = None
 
-    if not profile.organization:
-        return sorted(public_names)
-
-    own_name = profile.organization
-    visible: set[str] = {own_name} | public_names
+    if profile and profile.organization:
+        visible.add(profile.organization)
 
     # ── org-to-org trusts ─────────────────────────────────────────────────────
-    try:
-        own_org = PromopOrganization.objects.get(name=own_name, is_active=True)
+    trust_base_names = [name for name in visible if name]
+    if trust_base_names:
         for name in PromopOrgTrust.objects.filter(
-            trusted_org=own_org,
+            trusted_org__name__in=trust_base_names,
+            trusted_org__is_active=True,
             granting_org__is_active=True,
         ).values_list("granting_org__name", flat=True):
             visible.add(name)
-    except PromopOrganization.DoesNotExist:
-        pass  # org not registered in PROMOP — user sees only their own data
 
     # ── domain trusts ─────────────────────────────────────────────────────────
-    email = getattr(user, "email", "") or ""
     if "@" in email:
         user_domain = email.split("@")[1].lower()
         for name in PromopOrgTrust.objects.filter(
@@ -82,12 +104,15 @@ def apply_org_scope(qs, user):
                                always includes public orgs plus the user's own
                                org and any trust-granted orgs.
     """
+    if getattr(user, "is_staff", False) is True:
+        return qs, None  # staff see everything
+
     try:
         profile = user.profile
     except UserProfile.DoesNotExist:
-        return None, _NO_ORG_RESPONSE
+        profile = None
 
-    if profile.role == UserProfile.ROLE_STAFF:
+    if profile and profile.role == UserProfile.ROLE_STAFF:
         return qs, None  # staff see everything
 
     visible = get_visible_org_names(user)
