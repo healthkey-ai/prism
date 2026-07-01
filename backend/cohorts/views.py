@@ -155,7 +155,7 @@ THERAPY_MAP = {
         "second_line_therapies": FL_SECOND_LINE,
         "later_line_therapies": FL_LATER_LINE,
         "refractory_statuses": FL_REFRACTORY,
-        "stages": ["Ann Arbor I", "Ann Arbor II", "Ann Arbor III", "Ann Arbor IV"],
+        "stages": ["I", "IB", "II", "III", "IIIB", "IV", "IVB"],
         "cytogenetic_markers": ["t(14;18)", "del(1p36)", "TP53 mutation", "MYC rearrangement"],
         "extra_filters": {},
     },
