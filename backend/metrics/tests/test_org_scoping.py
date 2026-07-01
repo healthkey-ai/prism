@@ -42,13 +42,24 @@ def test_user_role_scoped_to_org(mock_visible):
     qs.filter.assert_called_once_with(organization__name__in=['Org A'])
 
 
-def test_user_with_no_org_returns_403():
+@patch('accounts.utils.get_visible_org_names', return_value=[])
+def test_user_with_no_org_and_no_public_orgs_returns_403(mock_visible):
     qs = _make_qs()
     user = _make_user(UserProfile.ROLE_USER, organization='')
     scoped_qs, err = _apply_org_scope(qs, user)
     assert scoped_qs is None
     assert err is not None
     assert err.status_code == 403
+
+
+@patch('accounts.utils.get_visible_org_names', return_value=['ABC Foundation'])
+def test_user_with_no_org_sees_public_data_orgs(mock_visible):
+    """A user with no assigned org can still see orgs with public_data=True."""
+    qs = _make_qs()
+    user = _make_user(UserProfile.ROLE_USER, organization='')
+    scoped_qs, err = _apply_org_scope(qs, user)
+    assert err is None
+    qs.filter.assert_called_once_with(organization__name__in=['ABC Foundation'])
 
 
 def test_no_profile_returns_403():

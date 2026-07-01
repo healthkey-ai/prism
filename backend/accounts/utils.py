@@ -13,32 +13,38 @@ _NO_ORG_RESPONSE = Response(
 
 def get_visible_org_names(user) -> list[str]:
     """
-    Return the sorted list of PatientInfo.organization values this user may see.
+    Return the sorted list of org names this user may see aggregate data for.
 
-    Access is granted via two mechanisms (both read from PROMOP's shared tables):
+    Access is granted via three mechanisms:
+      - Public orgs: organizations with public_data=True are visible to all
+        authenticated users regardless of their own org assignment.
       - Org-to-org trust: OrgTrust(granting_org=X, trusted_org=user's org)
         → user can see org X's patients
       - Domain trust: OrgTrust(granting_org=X, trusted_domain='example.com')
         → users with @example.com email can see org X's patients
 
-    The user's own org is always included.
-    Returns [] when the user has no org or no profile.
-
+    The user's own org is always included (if set).
     Do not call for ROLE_STAFF users — apply_org_scope handles that path
     by returning the queryset unmodified.
     """
     from .promop_models import PromopOrganization, PromopOrgTrust
 
+    # Public orgs are visible to every authenticated user
+    public_names: set[str] = set(
+        PromopOrganization.objects.filter(public_data=True, is_active=True)
+        .values_list("name", flat=True)
+    )
+
     try:
         profile = user.profile
     except UserProfile.DoesNotExist:
-        return []
+        return sorted(public_names)
 
     if not profile.organization:
-        return []
+        return sorted(public_names)
 
     own_name = profile.organization
-    visible: set[str] = {own_name}
+    visible: set[str] = {own_name} | public_names
 
     # ── org-to-org trusts ─────────────────────────────────────────────────────
     try:
@@ -71,10 +77,10 @@ def apply_org_scope(qs, user):
     Returns (scoped_qs, error_response_or_None).
     If error_response is not None, the caller should return it immediately.
 
-    - ROLE_STAFF → unrestricted (original qs returned unchanged)
-    - All others  → filtered to get_visible_org_names(user), which follows
-                    PROMOP's OrgTrust relationships so multi-org users
-                    (e.g. HealthTree Trust) see all their accessible orgs.
+    - ROLE_STAFF           → unrestricted
+    - Any authenticated user → filtered to get_visible_org_names(user), which
+                               always includes public orgs plus the user's own
+                               org and any trust-granted orgs.
     """
     try:
         profile = user.profile
@@ -83,9 +89,6 @@ def apply_org_scope(qs, user):
 
     if profile.role == UserProfile.ROLE_STAFF:
         return qs, None  # staff see everything
-
-    if not profile.organization:
-        return None, _NO_ORG_RESPONSE
 
     visible = get_visible_org_names(user)
     if not visible:

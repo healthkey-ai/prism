@@ -9,9 +9,10 @@ from django.db import models
 
 class PromopOrganization(models.Model):
     """Mirror of PROMOP's `organization` table."""
-    name      = models.CharField(max_length=200)
-    slug      = models.SlugField(max_length=60, unique=True)
-    is_active = models.BooleanField(default=True)
+    name        = models.CharField(max_length=200)
+    slug        = models.SlugField(max_length=60, unique=True)
+    is_active   = models.BooleanField(default=True)
+    public_data = models.BooleanField(default=False)
 
     class Meta:
         managed  = False
