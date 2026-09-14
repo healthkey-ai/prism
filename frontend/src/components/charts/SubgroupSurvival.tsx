@@ -44,14 +44,6 @@ export default function SubgroupSurvival({ data }: Props) {
       active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
     }`
 
-  if (!lines || lines.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-        No data available for this stratification
-      </div>
-    )
-  }
-
   return (
     <div>
       {/* Controls */}
@@ -72,7 +64,16 @@ export default function SubgroupSurvival({ data }: Props) {
         </div>
       </div>
 
-      <KMGroupChart lines={lines} legendExtra={<PValueBadge p={pValue} />} />
+      {lines.length > 0 ? <>
+        {outcome === 'os' && lines.every(line => line.events === 0) && (
+          <p className="text-xs text-gray-500 mb-3">No deaths were recorded in these groups during observed follow-up. The survival curves overlap at 100%.</p>
+        )}
+        <KMGroupChart lines={lines} legendExtra={<PValueBadge p={pValue} />} />
+      </> : (
+        <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+          No data available for this stratification
+        </div>
+      )}
 
       <p className="text-xs text-gray-400 mt-2">
         <span className="font-medium">OS</span>: 1L start → death. &nbsp;

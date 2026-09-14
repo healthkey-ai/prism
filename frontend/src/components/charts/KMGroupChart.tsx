@@ -23,8 +23,7 @@ const COLORS = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed']
 
 /**
  * Shared Kaplan-Meier step chart for a set of labelled survival lines.
- * Lines with no curve points are dropped — otherwise mergeKMCurves would
- * forward-fill them to a phantom flat line at 100% survival.
+ * Lines with no curve points are dropped from the plot and legend.
  */
 export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line start', legendExtra }: Props) {
   const validLines = useMemo(

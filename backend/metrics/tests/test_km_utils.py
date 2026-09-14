@@ -1,5 +1,33 @@
 import pytest
-from metrics.services.km_utils import km_curve, log_rank_p
+from metrics.services.km_utils import km_curve, km_result, log_rank_p
+
+
+def test_all_censored_curve_preserves_observed_follow_up():
+    result = km_result([(6.0, False), (12.0, False), (24.0, False)])
+    assert result["n"] == 3
+    assert result["events"] == 0
+    assert result["median"] is None
+    assert [p["time"] for p in result["curve"]] == [0.0, 24.0]
+    assert all(p["survival"] == 1.0 for p in result["curve"])
+    assert result["curve"][-1]["at_risk"] == 1
+
+
+def test_curve_extends_to_final_censor_without_changing_estimate():
+    result = km_result([(6.0, True), (12.0, False), (24.0, False)])
+    assert result["events"] == 1
+    event, final = result["curve"][1:]
+    assert final["time"] == 24.0
+    assert final["at_risk"] == 1
+    for key in ("survival", "ci_lower", "ci_upper"):
+        assert final[key] == event[key]
+
+
+def test_final_event_and_censor_share_one_curve_point():
+    result = km_result([(6.0, False), (12.0, True), (12.0, False)])
+    assert [p["time"] for p in result["curve"]] == [0.0, 12.0]
+    assert result["curve"][-1]["at_risk"] == 2
+    assert result["curve"][-1]["survival"] == 0.5
+    assert result["median"] == 12.0
 
 
 # ---------------------------------------------------------------------------

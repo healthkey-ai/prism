@@ -284,7 +284,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 description="Overall survival measured from a fixed landmark time point, including only patients who were alive and event-free at that point. This method eliminates early-death bias and estimates survival conditional on reaching the landmark — a standard technique when comparing outcomes across different treatment eras."
               
               onExport={canExport ? chartExportHandler('landmark_survival') : undefined}>
-                <SurvivalCurves data={{
+                <SurvivalCurves landmarkMonths={metrics.landmark_survival.landmark_months} data={{
                   os:  metrics.landmark_survival,
                   pfs: { curve: [], n: 0, median: null },
                   efs: { curve: [], n: 0, median: null },
@@ -374,7 +374,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 description="Hazard ratios (HR) for overall survival across prespecified subgroups. Each row shows the HR and 95% confidence interval for a subgroup relative to its complement. An HR < 1 (left of center) indicates better survival in that subgroup. Wide confidence intervals reflect small sample sizes within the subgroup."
               
               onExport={canExport ? chartExportHandler('forest_plot') : undefined}>
-                <ForestPlot data={metrics?.forest_plot ?? []} />
+                <ForestPlot data={metrics?.forest_plot ?? []} os={metrics?.survival?.os} />
               </MetricCard>
             )}
           </>
