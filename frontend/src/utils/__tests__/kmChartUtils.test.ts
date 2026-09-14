@@ -2,6 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { mergeKMCurves } from '../kmChartUtils'
 
 describe('mergeKMCurves', () => {
+  it('stops each curve at its observed follow-up and omits empty groups', () => {
+    const result = mergeKMCurves([
+      { key: 'short', curve: [{ time: 0, survival: 1 }, { time: 6, survival: 1 }] },
+      { key: 'long', curve: [{ time: 0, survival: 1 }, { time: 12, survival: 1 }] },
+      { key: 'empty', curve: [] },
+    ])
+    expect(result[1]).toEqual({ time: 6, short: 1, long: 1 })
+    expect(result[2]).toEqual({ time: 12, long: 1 })
+    expect(result[0]).not.toHaveProperty('empty')
+  })
+
   it('returns an empty array when given no curves', () => {
     expect(mergeKMCurves([])).toEqual([])
   })

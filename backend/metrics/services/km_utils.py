@@ -29,6 +29,7 @@ def km_curve(times_events):
     greenwood = 0.0  # running Greenwood variance sum: sum d/(n*(n-d))
     result    = [{"time": 0.0, "survival": 1.0, "at_risk": n,
                   "ci_lower": 1.0, "ci_upper": 1.0}]
+    last_time = max(buckets)
 
     for t in sorted(buckets):
         d = buckets[t]["d"]
@@ -46,6 +47,11 @@ def km_curve(times_events):
                 "ci_lower": round(max(0.0, survival - 1.96 * se), 4),
                 "ci_upper": round(min(1.0, survival + 1.96 * se), 4),
             })
+        # Retain the observed follow-up horizon even when the final observation
+        # is censored. With no events, the curve is a flat line through follow-up,
+        # not a lone origin point that chart clients mistake for missing data.
+        if t == last_time and t > result[-1]["time"]:
+            result.append({**result[-1], "time": t, "at_risk": at_risk})
         at_risk -= d + c
 
     return result
@@ -60,7 +66,12 @@ def km_median(curve):
 
 def km_result(times_events):
     curve = km_curve(times_events)
-    return {"curve": curve, "n": len(times_events), "median": km_median(curve)}
+    return {
+        "curve": curve,
+        "n": len(times_events),
+        "events": sum(1 for _, event in times_events if event),
+        "median": km_median(curve),
+    }
 
 
 def log_rank_hr(te1, te2):

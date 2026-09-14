@@ -112,6 +112,16 @@ def test_compute_each_stratification_has_os_and_pfs():
         assert "pfs" in result[strat], f"{strat} missing 'pfs'"
 
 
+def test_subgroup_os_curves_are_drawable_when_all_patients_are_censored():
+    result = compute(_make_stage_qs(["ISS Stage I", "ISS Stage II"]))
+    for line in result["by_stage"]["os"]:
+        assert line["events"] == 0
+        assert len(line["curve"]) == 2
+        assert line["curve"][-1]["time"] == 24.0
+        assert line["curve"][-1]["survival"] == 1.0
+    assert result["by_stage"]["os_p"] is None
+
+
 def test_compute_subgroup_entries_have_required_fields():
     qs = _make_stage_qs(["ISS Stage I", "ISS Stage II"])
     result = compute(qs)

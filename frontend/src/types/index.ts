@@ -216,7 +216,7 @@ export interface MetricsResponse {
   }
   incidence?: { quarter: string; diagnoses: number; treatment_starts: number }[]
   time_to_treatment?: { median_days: number|null; n: number; histogram: { label: string; count: number; lo: number; hi: number|null }[] }
-  landmark_survival?: { curve: { time: number; survival: number; at_risk: number }[]; n: number; median: number|null; landmark_months: number }
+  landmark_survival?: SurvivalLine & { landmark_months: number }
   disease_state?: {
     states: { key: string; label: string; count: number; pct: number }[]
     total: number
@@ -272,6 +272,7 @@ export interface ForestPlotRow {
 export interface SurvivalLine {
   curve: { time: number; survival: number; at_risk: number; ci_lower?: number; ci_upper?: number }[]
   n: number
+  events?: number
   median: number | null
 }
 
