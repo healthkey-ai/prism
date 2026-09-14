@@ -14,6 +14,7 @@ vi.mock('../api/client', () => ({
   fetchMetrics:      vi.fn(),
   fetchFormSettings: vi.fn(),
   fetchSavedCohorts: vi.fn(),
+  fetchMyOrgs:       vi.fn(),
   login:             vi.fn(),
   logout:            vi.fn(),
   signup:            vi.fn(),
@@ -68,5 +69,31 @@ describe('App — unauthenticated', () => {
 
     expect(passwordInput).toHaveFocus()
     expect(passwordInput).toHaveValue('secret123')
+  })
+})
+
+describe('App — analytics failure', () => {
+  afterEach(() => vi.clearAllMocks())
+
+  it('shows an error when the metrics request fails', async () => {
+    vi.mocked(client.fetchCurrentUser).mockResolvedValue({
+      id: 1, email: 'user@example.com', name: 'Test User', is_staff: false,
+    })
+    vi.mocked(client.fetchMyOrgs).mockResolvedValue([])
+    vi.mocked(client.fetchSavedCohorts).mockResolvedValue([])
+    vi.mocked(client.fetchFormSettings).mockResolvedValue({
+      diseases: ['Multiple Myeloma'], stages: [], first_line_therapies: [],
+      second_line_therapies: [], later_line_therapies: [], outcome_options: [],
+      cytogenetic_markers: [], refractory_statuses: [], countries: [], regions: [],
+      race_options: [], mrd_status_options: [], ecog_values: [], smoking_options: [],
+      therapy_line_options: [],
+    })
+    vi.mocked(client.fetchMetrics).mockRejectedValue(new Error('Server error'))
+
+    render(<App />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Failed to load analytics data. Please refresh to try again.'
+    )
   })
 })
