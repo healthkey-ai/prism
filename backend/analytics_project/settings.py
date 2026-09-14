@@ -63,6 +63,14 @@ DATABASES = {
     )
 }
 
+# PROMOP renamed this column in migration 0222. Environments migrate
+# independently, so retain the legacy default until their database is upgraded.
+CYTOGENETIC_MARKERS_DB_COLUMN = os.environ.get(
+    "CYTOGENETIC_MARKERS_DB_COLUMN", "cytogenic_markers"
+)
+if CYTOGENETIC_MARKERS_DB_COLUMN not in {"cytogenic_markers", "cytogenetic_markers"}:
+    raise ImproperlyConfigured("Invalid CYTOGENETIC_MARKERS_DB_COLUMN.")
+
 AUTH_USER_MODEL = "accounts.Identity"
 
 AUTH_PASSWORD_VALIDATORS = [

@@ -36,7 +36,7 @@ export default function App() {
 }
 
 function AuthenticatedApp({ auth }: { auth: AuthState }) {
-  const { filters, settings, metrics, loading, updateFilter, clearFilters, setFilters } = useAnalytics()
+  const { filters, settings, metrics, loading, error, updateFilter, clearFilters, setFilters } = useAnalytics()
   const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
   const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
   const [cohortDirty, setCohortDirty] = useState(false)
@@ -95,6 +95,11 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
         cohortDirty={cohortDirty}
       />
       <main className="flex-1 overflow-y-auto">
+        {error && (
+          <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-700">
+            {error} Please refresh to try again.
+          </div>
+        )}
         <Dashboard
           metrics={metrics}
           loading={loading}
