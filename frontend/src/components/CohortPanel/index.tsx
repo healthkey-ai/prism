@@ -11,6 +11,7 @@ interface Props {
   onClear: () => void
   cohortCount: number
   onLoadCohort: (filters: CohortFilters, cohortId?: number, cohortName?: string) => void
+  onDeleteCohort: (cohortId: number) => void
   activeCohortName: string | null
   activeCohortId: number | null
   cohortDirty: boolean
@@ -90,7 +91,7 @@ function RangeInputs({ label, minKey, maxKey, filters, onUpdate, step = 1 }: {
   )
 }
 
-export default function CohortPanel({ filters, settings, onUpdate, onClear, cohortCount, onLoadCohort, activeCohortName, activeCohortId, cohortDirty }: Props) {
+export default function CohortPanel({ filters, settings, onUpdate, onClear, cohortCount, onLoadCohort, onDeleteCohort, activeCohortName, activeCohortId, cohortDirty }: Props) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [savedRefresh, setSavedRefresh] = useState(0)
   const [orgOptions, setOrgOptions] = useState<{ value: string; label: string }[]>([])
@@ -156,7 +157,11 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
         </Section>
 
         <Section title="Saved Cohorts" defaultOpen={false}>
-          <SavedCohortsList onLoad={(f, id, name) => onLoadCohort(f, id, name)} refreshToken={savedRefresh} />
+          <SavedCohortsList
+            onLoad={(f, id, name) => onLoadCohort(f, id, name)}
+            onDelete={onDeleteCohort}
+            refreshToken={savedRefresh}
+          />
         </Section>
 
         <Section title="Disease">

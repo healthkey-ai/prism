@@ -4,6 +4,7 @@ import type { CohortFilters, SavedCohort } from '../../types'
 
 interface Props {
   onLoad: (filters: CohortFilters, cohortId: number, cohortName: string) => void
+  onDelete?: (cohortId: number) => void
   refreshToken: number
 }
 
@@ -14,7 +15,12 @@ function responseStatus(err: unknown): number | undefined {
   return typeof response.status === 'number' ? response.status : undefined
 }
 
-export default function SavedCohortsList({ onLoad, refreshToken }: Props) {
+function responseDetail(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+  return detail ?? fallback
+}
+
+export default function SavedCohortsList({ onLoad, onDelete, refreshToken }: Props) {
   const [cohorts, setCohorts] = useState<SavedCohort[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,8 +73,8 @@ export default function SavedCohortsList({ onLoad, refreshToken }: Props) {
     try {
       const updated = await updateSavedCohort(id, { name: trimmed })
       setCohorts(prev => prev.map(c => c.id === id ? { ...c, name: updated.name } : c))
-    } catch {
-      alert('Failed to rename cohort.')
+    } catch (err) {
+      alert(responseDetail(err, 'Failed to rename cohort.'))
     }
   }
 
@@ -77,6 +83,7 @@ export default function SavedCohortsList({ onLoad, refreshToken }: Props) {
     try {
       await deleteSavedCohort(id)
       setCohorts(prev => prev.filter(c => c.id !== id))
+      onDelete?.(id)
     } catch {
       alert('Failed to delete cohort. Please try again.')
     }
@@ -122,10 +129,11 @@ export default function SavedCohortsList({ onLoad, refreshToken }: Props) {
               </button>
               <button
                 onClick={() => handleDelete(c.id)}
-                className="text-slate-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Delete"
+                className="text-red-400/80 hover:text-red-300 text-[11px] rounded px-1 py-0.5 transition-colors"
+                title={`Delete ${c.name}`}
+                aria-label={`Delete ${c.name}`}
               >
-                ✕
+                Delete
               </button>
             </div>
           </div>

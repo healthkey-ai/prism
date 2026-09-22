@@ -11,10 +11,15 @@ interface Props {
 }
 
 export default function SaveCohortModal({ filters, activeCohortId, activeCohortName, onSaved, onClose }: Props) {
-  const [name, setName] = useState(activeCohortName ?? '')
+  const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  function errorDetail(err: unknown, fallback: string) {
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    return detail ?? fallback
+  }
 
   async function handleUpdate() {
     if (!activeCohortId) return
@@ -23,8 +28,8 @@ export default function SaveCohortModal({ filters, activeCohortId, activeCohortN
     try {
       const cohort = await updateSavedCohort(activeCohortId, { filters })
       onSaved(cohort)
-    } catch {
-      setError('Failed to update cohort.')
+    } catch (err) {
+      setError(errorDetail(err, 'Failed to update cohort.'))
       setSaving(false)
     }
   }
@@ -32,13 +37,17 @@ export default function SaveCohortModal({ filters, activeCohortId, activeCohortN
   async function handleSaveNew(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { setError('Name is required.'); return }
+    if (activeCohortName && name.trim().toLowerCase() === activeCohortName.trim().toLowerCase()) {
+      setError('Choose a different name when saving as new.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
       const cohort = await createSavedCohort({ name: name.trim(), description, filters })
       onSaved(cohort)
-    } catch {
-      setError('Failed to save cohort.')
+    } catch (err) {
+      setError(errorDetail(err, 'Failed to save cohort.'))
       setSaving(false)
     }
   }
@@ -73,7 +82,7 @@ export default function SaveCohortModal({ filters, activeCohortId, activeCohortN
               value={name}
               onChange={e => setName(e.target.value)}
               autoFocus={!activeCohortId}
-              placeholder="e.g. High-risk MM triple refractory"
+              placeholder={activeCohortId ? 'Enter a new, unique name' : 'e.g. High-risk MM triple refractory'}
               className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
             />
           </div>
