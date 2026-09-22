@@ -96,6 +96,26 @@ class TestSavedCohortList:
         resp = api_client.post(SAVED_URL, {"name": "Bad", "filters": "not-a-dict"}, format="json")
         assert resp.status_code == 400
 
+    def test_create_with_duplicate_name_returns_400(self, api_client, user, cohort):
+        api_client.force_authenticate(user=user)
+        resp = api_client.post(
+            SAVED_URL,
+            {"name": "  iss stage i  ", "filters": {}},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.data["detail"] == "A saved cohort with this name already exists."
+        assert SavedCohort.objects.filter(user=user).count() == 1
+
+    def test_duplicate_name_is_scoped_to_user(self, api_client, other_user, cohort):
+        api_client.force_authenticate(user=other_user)
+        resp = api_client.post(
+            SAVED_URL,
+            {"name": cohort.name, "filters": {}},
+            format="json",
+        )
+        assert resp.status_code == 201
+
 
 # ── Detail / Update / Delete ─────────────────────────────────────────────────
 
@@ -135,6 +155,29 @@ class TestSavedCohortDetail:
         assert resp.status_code == 200
         cohort.refresh_from_db()
         assert cohort.description == "Updated notes"
+
+    def test_update_to_duplicate_name_returns_400(self, api_client, user, cohort):
+        SavedCohort.objects.create(user=user, name="Other Cohort", filters={})
+        api_client.force_authenticate(user=user)
+        resp = api_client.put(
+            detail_url(cohort.pk),
+            {"name": "  OTHER COHORT  "},
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.data["detail"] == "A saved cohort with this name already exists."
+        cohort.refresh_from_db()
+        assert cohort.name == "ISS Stage I"
+
+    def test_update_can_keep_own_name_with_different_case(self, api_client, user, cohort):
+        api_client.force_authenticate(user=user)
+        resp = api_client.put(
+            detail_url(cohort.pk),
+            {"name": "iss stage i"},
+            format="json",
+        )
+        assert resp.status_code == 200
+        assert resp.data["name"] == "iss stage i"
 
     def test_update_other_users_cohort_returns_404(self, api_client, other_user, cohort):
         api_client.force_authenticate(user=other_user)

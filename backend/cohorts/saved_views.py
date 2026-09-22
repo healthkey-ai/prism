@@ -163,6 +163,14 @@ def _safe_filename(name: str) -> str:
     return cleaned.encode("ascii", "replace").decode("ascii")
 
 
+def _cohort_name_exists(user, name: str, *, exclude_pk: Optional[int] = None) -> bool:
+    """Return whether the user already has a cohort with this normalized name."""
+    cohorts = SavedCohort.objects.filter(user=user, name__iexact=name.strip())
+    if exclude_pk is not None:
+        cohorts = cohorts.exclude(pk=exclude_pk)
+    return cohorts.exists()
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def saved_cohort_list(request):
@@ -180,6 +188,11 @@ def saved_cohort_list(request):
     name = request.data.get("name", "").strip()
     if not name:
         return Response({"detail": "name is required."}, status=status.HTTP_400_BAD_REQUEST)
+    if _cohort_name_exists(request.user, name):
+        return Response(
+            {"detail": "A saved cohort with this name already exists."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     filters = request.data.get("filters")
     if not isinstance(filters, dict):
         return Response({"detail": "filters must be a JSON object."}, status=status.HTTP_400_BAD_REQUEST)
@@ -211,6 +224,11 @@ def saved_cohort_detail(request, pk):
             name = request.data["name"].strip() if isinstance(request.data["name"], str) else ""
             if not name:
                 return Response({"detail": "name cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+            if _cohort_name_exists(request.user, name, exclude_pk=cohort.pk):
+                return Response(
+                    {"detail": "A saved cohort with this name already exists."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             cohort.name = name
         if "description" in request.data:
             cohort.description = request.data["description"]

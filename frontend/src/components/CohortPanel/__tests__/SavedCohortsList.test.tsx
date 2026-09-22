@@ -132,5 +132,42 @@ describe('SavedCohortsList', () => {
         expect(client.updateSavedCohort).not.toHaveBeenCalled()
       })
     })
+
+    it('shows the API detail when the new name is already used', async () => {
+      vi.spyOn(window, 'alert').mockImplementation(() => {})
+      vi.mocked(client.fetchSavedCohorts).mockResolvedValue(mockCohorts)
+      vi.mocked(client.updateSavedCohort).mockRejectedValue({
+        response: { data: { detail: 'A saved cohort with this name already exists.' } },
+      })
+      render(<SavedCohortsList onLoad={onLoad} refreshToken={0} />)
+      await screen.findByText('ISS Stage I')
+      await userEvent.click(screen.getAllByTitle('Rename')[0])
+      const input = screen.getByDisplayValue('ISS Stage I')
+      await userEvent.clear(input)
+      await userEvent.type(input, 'Triple Refractory{Enter}')
+      await waitFor(() => {
+        expect(window.alert).toHaveBeenCalledWith('A saved cohort with this name already exists.')
+      })
+    })
+  })
+
+  describe('deleting a cohort', () => {
+    it('exposes a visible, named delete button and removes the cohort after confirmation', async () => {
+      const onDelete = vi.fn()
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      vi.mocked(client.fetchSavedCohorts).mockResolvedValue(mockCohorts)
+      vi.mocked(client.deleteSavedCohort).mockResolvedValue()
+      render(<SavedCohortsList onLoad={onLoad} onDelete={onDelete} refreshToken={0} />)
+
+      const deleteButton = await screen.findByRole('button', { name: 'Delete ISS Stage I' })
+      expect(deleteButton).toHaveTextContent('Delete')
+      await userEvent.click(deleteButton)
+
+      await waitFor(() => {
+        expect(client.deleteSavedCohort).toHaveBeenCalledWith(1)
+        expect(onDelete).toHaveBeenCalledWith(1)
+        expect(screen.queryByText('ISS Stage I')).not.toBeInTheDocument()
+      })
+    })
   })
 })

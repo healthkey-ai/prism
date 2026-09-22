@@ -81,6 +81,13 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
     clearFilters()
   }
 
+  function handleDeleteCohort(cohortId: number) {
+    if (cohortId !== activeSavedCohortId) return
+    setActiveSavedCohortId(null)
+    setActiveCohortName(null)
+    setCohortDirty(false)
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <CohortPanel
@@ -90,6 +97,7 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
         onClear={handleClearFilters}
         cohortCount={metrics?.cohort.count ?? 0}
         onLoadCohort={handleLoadCohort}
+        onDeleteCohort={handleDeleteCohort}
         activeCohortName={activeCohortName}
         activeCohortId={activeSavedCohortId}
         cohortDirty={cohortDirty}
