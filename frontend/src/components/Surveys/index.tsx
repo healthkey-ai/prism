@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchSurveys, fetchSurveyQuestions, fetchSurveyCrosstab } from '../../api/client'
 import type { SurveySummary, SurveyQuestion, SurveyCrosstab } from '../../api/client'
 import CrosstabHeatmap from './CrosstabHeatmap'
+import NumericSummaryPlot from './NumericSummaryPlot'
 
 export default function Surveys() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([])
@@ -95,8 +96,10 @@ export default function Surveys() {
     {chosenSurvey && table && !loading && <div className="mt-6">
       <p className="mb-3 text-sm text-gray-600">{table.paired_completions} of {chosenSurvey.completions} completions answered both questions.</p>
       {table.paired_completions === 0 ? <p className="text-sm text-gray-500">No paired answers for these questions.</p> :
-        <CrosstabHeatmap data={table} xQuestion={xQuestion} yQuestion={yQuestion} />}
-      <p className="mt-3 text-xs text-gray-500">A response with multiple selections can contribute to several cells. Named treatments are matched to PRism’s FL therapy options; descriptions without a clear match appear as Other / unmapped treatment.</p>
+        table.numeric_summaries?.length ?
+          <NumericSummaryPlot summaries={table.numeric_summaries} xQuestion={xQuestion} yQuestion={yQuestion} /> :
+          <CrosstabHeatmap data={table} xQuestion={xQuestion} yQuestion={yQuestion} />}
+      <p className="mt-3 text-xs text-gray-500">A response with multiple selections can contribute to several {table.numeric_summaries?.length ? 'groups' : 'cells'}. Named treatments are matched to PRism’s FL therapy options; descriptions without a clear match appear as Other / unmapped treatment.</p>
     </div>}
   </section>
 }

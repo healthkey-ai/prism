@@ -97,3 +97,53 @@ def test_structured_values_remain_eligible(type_, value):
     question = SimpleNamespace(type=type_, text="Answer", options=SimpleNamespace(all=lambda: []))
     assert eligible(question)
     assert _labels(question, {type_: value}) == [str(value)]
+
+
+@pytest.mark.django_db
+def test_numeric_scale_summarizes_paired_submitted_answers(survey_tables):
+    survey = Survey.objects.create(id=uuid.uuid4(), slug="scale-demo", title="Scale demo")
+    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
+    category = SurveyQuestion.objects.create(survey_version=version, key="group", type="single",
+                                             order=1, text="Group")
+    SurveyQuestion.objects.create(survey_version=version, key="score", type="scale",
+                                  order=2, text="Score")
+    SurveyOption.objects.create(question=category, key="a", order=0, label="A", free_text=False)
+    SurveyOption.objects.create(question=category, key="b", order=1, label="B", free_text=False)
+
+    for label, score, status in [("a", 1, "submitted"), ("a", 3, "submitted"),
+                                 ("a", 5, "submitted"), ("b", 0, "submitted"),
+                                 ("a", 100, "in_progress")]:
+        response = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status=status)
+        SurveyAnswer.objects.create(response=response, question_key="group", value={"option": label})
+        SurveyAnswer.objects.create(response=response, question_key="score", value={"value": score})
+
+    result = crosstab(survey, "group", "score")
+    assert result["paired_completions"] == 4
+    assert result["cells"] == []
+    assert result["numeric_summaries"] == [{"axis": "y", "groups": [
+        {"label": "A", "n": 3, "mean": 3, "sd": 2},
+        {"label": "B", "n": 1, "mean": 0, "sd": None},
+    ]}]
+    inverted = crosstab(survey, "score", "group")
+    assert inverted["numeric_summaries"] == [{"axis": "x", "groups": result["numeric_summaries"][0]["groups"]}]
+
+
+@pytest.mark.django_db
+def test_two_numeric_questions_use_only_paired_answers(survey_tables):
+    survey = Survey.objects.create(id=uuid.uuid4(), slug="two-numbers", title="Two numbers")
+    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
+    SurveyQuestion.objects.create(survey_version=version, key="x", type="number", order=1, text="X")
+    SurveyQuestion.objects.create(survey_version=version, key="y", type="scale", order=2, text="Y")
+    for x, y in [(2, 1), (4, 5), (8, None)]:
+        response = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+        SurveyAnswer.objects.create(response=response, question_key="x", value={"number": x})
+        if y is not None:
+            SurveyAnswer.objects.create(response=response, question_key="y", value={"value": y})
+    result = crosstab(survey, "x", "y")
+    assert result["paired_completions"] == 2
+    assert result["numeric_summaries"] == [
+        {"axis": "x", "groups": [{"label": "All paired responses", "n": 2,
+                                   "mean": 3, "sd": pytest.approx(2 ** 0.5)}]},
+        {"axis": "y", "groups": [{"label": "All paired responses", "n": 2,
+                                   "mean": 3, "sd": pytest.approx(8 ** 0.5)}]},
+    ]

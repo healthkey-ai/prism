@@ -8,6 +8,10 @@ export interface SurveyCrosstab {
   x_values: string[]
   y_values: string[]
   cells: { x: string; y: string; count: number }[]
+  numeric_summaries?: {
+    axis: 'x' | 'y'
+    groups: { label: string; n: number; mean: number; sd: number | null }[]
+  }[]
 }
 
 function getCsrfToken(): string {
