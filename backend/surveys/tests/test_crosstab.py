@@ -72,3 +72,26 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
 ])
 def test_treatment_mapping_is_conservative(description, expected):
     assert map_fl_treatment(description) == expected
+
+
+def test_ranking_answers_keep_their_positions():
+    from surveys.services import _labels, eligible
+
+    question = SimpleNamespace(
+        type="ranking", text="Rank outcomes",
+        options=SimpleNamespace(all=lambda: [
+            SimpleNamespace(key="a", label="Remission"),
+            SimpleNamespace(key="b", label="Fewer visits"),
+        ]),
+    )
+    assert eligible(question)
+    assert _labels(question, {"order": ["b", "a"]}) == ["1: Fewer visits", "2: Remission"]
+
+
+@pytest.mark.parametrize("type_, value", [("number", 42), ("date", "2026-01-02")])
+def test_structured_values_remain_eligible(type_, value):
+    from surveys.services import _labels, eligible
+
+    question = SimpleNamespace(type=type_, text="Answer", options=SimpleNamespace(all=lambda: []))
+    assert eligible(question)
+    assert _labels(question, {type_: value}) == [str(value)]

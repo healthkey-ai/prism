@@ -8,7 +8,7 @@ from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
 from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse
 
 
-CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix"}
+CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
 TREATMENT_WORDS = re.compile(r"\b(treatments?|therap(?:y|ies)|regimens?|medications?|drugs?)\b", re.I)
 THERAPIES = list(dict.fromkeys(FL_FIRST_LINE + FL_SECOND_LINE + FL_LATER_LINE))
 ALIASES = {
@@ -76,9 +76,14 @@ def _labels(question, value):
     selected = value.get("options") if question.type == "multi" else [value.get("option")]
     if question.type == "scale":
         selected = [value.get("value")]
+    if question.type in {"number", "date"}:
+        selected = [value.get(question.type)]
     if question.type == "matrix":
         # A matrix has several row values, each a separate categorical answer.
         selected = [f"{row}: {answer}" for row, answer in (value.get("ratings") or {}).items()]
+    if question.type == "ranking":
+        return [f"{position}: {option_labels.get(key, key)}" for position, key in
+                enumerate(value.get("order") or [], start=1)]
     if question.type == "text":
         mapped = map_fl_treatment(value.get("text"))
         return [mapped] if mapped else ["Other / unmapped treatment"] if value.get("text") else []
