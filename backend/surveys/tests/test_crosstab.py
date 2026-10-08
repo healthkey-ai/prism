@@ -147,3 +147,49 @@ def test_two_numeric_questions_use_only_paired_answers(survey_tables):
         {"axis": "y", "groups": [{"label": "All paired responses", "n": 2,
                                    "mean": 3, "sd": pytest.approx(8 ** 0.5)}]},
     ]
+
+
+@pytest.mark.django_db
+def test_ecog_choice_scores_are_numeric_on_either_axis(survey_tables):
+    survey = Survey.objects.create(id=uuid.uuid4(), slug="ecog-demo", title="ECOG demo")
+    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
+    treatment = SurveyQuestion.objects.create(survey_version=version, key="treatment", type="single",
+                                              order=1, text="Last treatment")
+    ecog = SurveyQuestion.objects.create(survey_version=version, key="ecog", type="single",
+                                         order=2, text="What is your current ECOG performance score?")
+    other_choice = SurveyQuestion.objects.create(survey_version=version, key="other_score", type="single",
+                                                 order=3, text="Which score category?")
+    SurveyOption.objects.create(question=treatment, key="br", order=0, label="BR", free_text=False)
+    SurveyOption.objects.create(question=treatment, key="rchop", order=1, label="R-CHOP", free_text=False)
+    for score, label in [(0, "Fully active"), (1, "Restricted in physically strenuous activity"),
+                         (2, "Ambulatory and capable of self-care")]:
+        SurveyOption.objects.create(question=ecog, key=str(score), order=score,
+                                    label=f"{score} - {label}", free_text=False)
+    for score in (0, 1):
+        SurveyOption.objects.create(question=other_choice, key=str(score), order=score,
+                                    label=str(score), free_text=False)
+
+    for therapy, score in [("br", "0"), ("br", "2"), ("rchop", "1"), ("br", "invalid")]:
+        response = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+        SurveyAnswer.objects.create(response=response, question_key="treatment", value={"option": therapy})
+        SurveyAnswer.objects.create(response=response, question_key="ecog", value={"option": score})
+        SurveyAnswer.objects.create(response=response, question_key="other_score", value={"option": "0"})
+
+    result = crosstab(survey, "treatment", "ecog")
+    expected = [{"label": "BR", "n": 2, "mean": 1, "sd": pytest.approx(2 ** 0.5)},
+                {"label": "R-CHOP", "n": 1, "mean": 1, "sd": None}]
+    assert result["paired_completions"] == 3
+    assert result["cells"] == []
+    assert result["numeric_summaries"] == [{"axis": "y", "groups": expected}]
+    assert crosstab(survey, "ecog", "treatment")["numeric_summaries"] == [
+        {"axis": "x", "groups": expected}]
+    categorical = crosstab(survey, "treatment", "other_score")
+    assert "numeric_summaries" not in categorical
+    assert categorical["cells"] == [
+        {"x": "BR", "y": "0", "count": 3},
+        {"x": "R-CHOP", "y": "0", "count": 1},
+    ]
+
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_staff=True, is_authenticated=True))
+    assert client.get(f"/api/surveys/{survey.pk}/crosstab/?x=treatment&y=ecog").json() == result
