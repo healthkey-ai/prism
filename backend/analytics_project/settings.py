@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "patients",
     "cohorts",
     "metrics",
+    "surveys",
 ]
 
 MIDDLEWARE = [

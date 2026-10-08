@@ -1,6 +1,15 @@
 import axios from 'axios'
 import type { CohortFilters, FormSettings, MetricsResponse, SavedCohort } from '../types'
 
+export interface SurveySummary { id: string; title: string; completions: number }
+export interface SurveyQuestion { key: string; text: string; type: string }
+export interface SurveyCrosstab {
+  paired_completions: number
+  x_values: string[]
+  y_values: string[]
+  cells: { x: string; y: string; count: number }[]
+}
+
 function getCsrfToken(): string {
   const match = document.cookie.match(/csrftoken=([^;]+)/)
   return match ? match[1] : ''
@@ -56,6 +65,22 @@ export async function fetchFormSettings(disease: string, org?: string): Promise<
 
 export async function fetchMetrics(filters: CohortFilters): Promise<MetricsResponse> {
   const { data } = await api.get<MetricsResponse>(`/metrics/?${toParams(filters)}`)
+  return data
+}
+
+export async function fetchSurveys(): Promise<SurveySummary[]> {
+  const { data } = await api.get<SurveySummary[]>('/surveys/')
+  return data
+}
+
+export async function fetchSurveyQuestions(id: string): Promise<SurveyQuestion[]> {
+  const { data } = await api.get<SurveyQuestion[]>(`/surveys/${id}/questions/`)
+  return data
+}
+
+export async function fetchSurveyCrosstab(id: string, x: string, y: string): Promise<SurveyCrosstab> {
+  const params = new URLSearchParams({ x, y })
+  const { data } = await api.get<SurveyCrosstab>(`/surveys/${id}/crosstab/?${params}`)
   return data
 }
 
