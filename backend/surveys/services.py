@@ -12,6 +12,7 @@ from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyRe
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
 NUMERIC_TYPES = {"scale", "number"}
+ECOG_WORD = re.compile(r"\becog\b", re.I)
 TREATMENT_WORDS = re.compile(r"\b(treatments?|therap(?:y|ies)|regimens?|medications?|drugs?)\b", re.I)
 THERAPIES = list(dict.fromkeys(FL_FIRST_LINE + FL_SECOND_LINE + FL_LATER_LINE))
 ALIASES = {
@@ -45,6 +46,12 @@ def map_fl_treatment(description):
 def eligible(question):
     return question.type in CHOICE_TYPES or (
         question.type == "text" and bool(TREATMENT_WORDS.search(question.text))
+    )
+
+
+def _is_numeric(question_type, key, text):
+    return question_type in NUMERIC_TYPES or (
+        question_type in {"single", "dropdown"} and bool(ECOG_WORD.search(f"{key.replace('_', ' ')} {text}"))
     )
 
 
@@ -101,6 +108,17 @@ def _labels(question, value):
 def _numeric_value(question, value):
     if not isinstance(value, dict) or value.get("skipped"):
         return None
+    if question.type in {"single", "dropdown"} and _is_numeric(question.type, question.key, question.text):
+        selected = value.get("option")
+        option = next((o for o in question.options.all() if o.key == selected), None)
+        if option is None:
+            return None
+        # ECOG is ordinal 0–5. The demo survey stores digit keys and descriptive
+        # labels; other instruments may use opaque keys with a score in the label.
+        if re.fullmatch(r"[0-5]", option.key):
+            return float(option.key)
+        match = re.match(r"^(?:ECOG\s*)?([0-5])\b", option.label, re.I)
+        return float(match.group(1)) if match else None
     field = "value" if question.type == "scale" else "number"
     number = value.get(field)
     if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number):
@@ -123,9 +141,11 @@ def _summaries(samples):
 
 
 def crosstab(survey, x_key, y_key):
-    catalog = {q["key"]: q["type"] for q in question_catalog(survey)}
-    x_numeric = catalog.get(x_key) in NUMERIC_TYPES
-    y_numeric = catalog.get(y_key) in NUMERIC_TYPES
+    catalog = {q["key"]: q for q in question_catalog(survey)}
+    x_info = catalog.get(x_key, {})
+    y_info = catalog.get(y_key, {})
+    x_numeric = _is_numeric(x_info.get("type"), x_key, x_info.get("text", ""))
+    y_numeric = _is_numeric(y_info.get("type"), y_key, y_info.get("text", ""))
     questions = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=[x_key, y_key]
     ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
@@ -141,7 +161,7 @@ def crosstab(survey, x_key, y_key):
         answers = {a.question_key: a.value for a in response.answers.all()}
         xq = by_version.get((response.survey_version_id, x_key))
         yq = by_version.get((response.survey_version_id, y_key))
-        if not xq or not yq or xq.type != catalog.get(x_key) or yq.type != catalog.get(y_key):
+        if not xq or not yq or xq.type != x_info.get("type") or yq.type != y_info.get("type"):
             continue
         x_number = _numeric_value(xq, answers.get(x_key)) if x_numeric else None
         y_number = _numeric_value(yq, answers.get(y_key)) if y_numeric else None
