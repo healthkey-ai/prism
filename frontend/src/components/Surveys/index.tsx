@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchSurveys, fetchSurveyQuestions, fetchSurveyCrosstab } from '../../api/client'
 import type { SurveySummary, SurveyQuestion, SurveyCrosstab } from '../../api/client'
+import CrosstabHeatmap from './CrosstabHeatmap'
 
 export default function Surveys() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([])
@@ -63,7 +64,8 @@ export default function Surveys() {
   }
 
   const chosenSurvey = surveys.find(s => s.id === surveyId)
-  const count = (column: string, row: string) => table?.cells.find(c => c.x === column && c.y === row)?.count ?? 0
+  const xQuestion = questions.find(q => q.key === x)?.text ?? ''
+  const yQuestion = questions.find(q => q.key === y)?.text ?? ''
 
   return <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h2 className="text-xl font-semibold text-gray-900">Crosstabulation Analysis</h2>
@@ -93,15 +95,7 @@ export default function Surveys() {
     {chosenSurvey && table && !loading && <div className="mt-6">
       <p className="mb-3 text-sm text-gray-600">{table.paired_completions} of {chosenSurvey.completions} completions answered both questions.</p>
       {table.paired_completions === 0 ? <p className="text-sm text-gray-500">No paired answers for these questions.</p> :
-        <div className="overflow-x-auto"><table className="min-w-full border-collapse text-sm">
-          <caption className="sr-only">Crosstabulation of X and Y answers</caption>
-          <thead><tr><th scope="col" className="border bg-gray-50 p-3 text-left">Y / X</th>
-            {table.x_values.map(v => <th key={v} scope="col" className="border bg-gray-50 p-3 text-right">{v}</th>)}
-          </tr></thead>
-          <tbody>{table.y_values.map(row => <tr key={row}><th scope="row" className="border p-3 text-left font-medium">{row}</th>
-            {table.x_values.map(column => <td key={column} className="border p-3 text-right tabular-nums">{count(column, row)}</td>)}
-          </tr>)}</tbody>
-        </table></div>}
+        <CrosstabHeatmap data={table} xQuestion={xQuestion} yQuestion={yQuestion} />}
       <p className="mt-3 text-xs text-gray-500">A response with multiple selections can contribute to several cells. Named treatments are matched to PRism’s FL therapy options; descriptions without a clear match appear as Other / unmapped treatment.</p>
     </div>}
   </section>
