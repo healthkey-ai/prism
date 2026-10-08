@@ -10,21 +10,23 @@ from surveys.models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, S
 from surveys.services import crosstab, map_fl_treatment, question_catalog, survey_catalog
 
 
-@pytest.fixture
-def survey_tables():
+@pytest.fixture(scope="module")
+def survey_tables(django_db_setup, django_db_blocker):
     # These are unmanaged PROMOP mirrors, so create only their tables in the
     # isolated Django test database. Never use the shared DATABASE_URL here.
     models = [Survey, SurveyVersion, SurveyQuestion, SurveyOption, SurveyResponse, SurveyAnswer]
-    with connection.schema_editor() as editor:
-        for model in models:
-            editor.create_model(model)
+    with django_db_blocker.unblock():
+        with connection.schema_editor() as editor:
+            for model in models:
+                editor.create_model(model)
     yield
-    with connection.schema_editor() as editor:
-        for model in reversed(models):
-            editor.delete_model(model)
+    with django_db_blocker.unblock():
+        with connection.schema_editor() as editor:
+            for model in reversed(models):
+                editor.delete_model(model)
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     survey = Survey.objects.create(id=uuid.uuid4(), slug="fl", title="FL survey")
     version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
