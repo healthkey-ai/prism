@@ -35,3 +35,21 @@ it('loads selections and shows the paired count and crosstab', async () => {
   expect(screen.getByRole('img', { name: 'UK with BR: 2 completions' })).toBeInTheDocument()
   await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b'))
 })
+
+it('uses a mean and SD chart when a selected answer is numeric', async () => {
+  vi.mocked(client.fetchSurveyQuestions).mockResolvedValue([
+    { key: 'a', text: 'Treatment?', type: 'single' },
+    { key: 'b', text: 'Well-being score?', type: 'scale' },
+  ])
+  vi.mocked(client.fetchSurveyCrosstab).mockResolvedValue({
+    paired_completions: 2, x_values: [], y_values: [], cells: [],
+    numeric_summaries: [{ axis: 'y', groups: [{ label: 'BR', n: 2, mean: 3, sd: 1 }] }],
+  })
+  const user = userEvent.setup()
+  render(<Surveys />)
+  await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
+  await user.selectOptions(await screen.findByLabelText('X question'), 'a')
+  await user.selectOptions(screen.getByLabelText('Y question'), 'b')
+  expect(await screen.findByRole('figure', { name: 'Numeric survey mean and standard deviation chart' })).toBeInTheDocument()
+  expect(screen.queryByRole('figure', { name: 'Crosstabulation heatmap' })).not.toBeInTheDocument()
+})

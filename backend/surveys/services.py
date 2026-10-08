@@ -1,5 +1,7 @@
 """Aggregate submitted survey answers without returning respondent data."""
 import re
+import math
+import statistics
 from collections import Counter
 
 from django.db.models import Count, Prefetch, Q
@@ -9,6 +11,7 @@ from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyRe
 
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
+NUMERIC_TYPES = {"scale", "number"}
 TREATMENT_WORDS = re.compile(r"\b(treatments?|therap(?:y|ies)|regimens?|medications?|drugs?)\b", re.I)
 THERAPIES = list(dict.fromkeys(FL_FIRST_LINE + FL_SECOND_LINE + FL_LATER_LINE))
 ALIASES = {
@@ -95,12 +98,41 @@ def _labels(question, value):
     return list(dict.fromkeys(labels))
 
 
+def _numeric_value(question, value):
+    if not isinstance(value, dict) or value.get("skipped"):
+        return None
+    field = "value" if question.type == "scale" else "number"
+    number = value.get(field)
+    if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number):
+        return None
+    return float(number)
+
+
+def _summaries(samples):
+    return [
+        {
+            "label": label,
+            "n": len(values),
+            "mean": statistics.mean(values),
+            # Sample SD is undefined for a single response; the chart shows a
+            # point without an error bar and reports n=1.
+            "sd": statistics.stdev(values) if len(values) > 1 else None,
+        }
+        for label, values in sorted(samples.items())
+    ]
+
+
 def crosstab(survey, x_key, y_key):
+    catalog = {q["key"]: q["type"] for q in question_catalog(survey)}
+    x_numeric = catalog.get(x_key) in NUMERIC_TYPES
+    y_numeric = catalog.get(y_key) in NUMERIC_TYPES
     questions = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=[x_key, y_key]
     ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
     by_version = {(q.survey_version_id, q.key): q for q in questions if eligible(q)}
     counts = Counter()
+    x_samples = {}
+    y_samples = {}
     paired = 0
     responses = SurveyResponse.objects.filter(
         survey_version__survey=survey, status="submitted"
@@ -109,15 +141,36 @@ def crosstab(survey, x_key, y_key):
         answers = {a.question_key: a.value for a in response.answers.all()}
         xq = by_version.get((response.survey_version_id, x_key))
         yq = by_version.get((response.survey_version_id, y_key))
-        if not xq or not yq:
+        if not xq or not yq or xq.type != catalog.get(x_key) or yq.type != catalog.get(y_key):
             continue
-        xs = _labels(xq, answers.get(x_key))
-        ys = _labels(yq, answers.get(y_key))
+        x_number = _numeric_value(xq, answers.get(x_key)) if x_numeric else None
+        y_number = _numeric_value(yq, answers.get(y_key)) if y_numeric else None
+        xs = ["All paired responses"] if x_numeric and x_number is not None else (
+            _labels(xq, answers.get(x_key)) if not x_numeric else []
+        )
+        ys = ["All paired responses"] if y_numeric and y_number is not None else (
+            _labels(yq, answers.get(y_key)) if not y_numeric else []
+        )
         if xs and ys:
             paired += 1
-            for x in xs:
+            if x_numeric:
                 for y in ys:
-                    counts[(x, y)] += 1
+                    x_samples.setdefault(y, []).append(x_number)
+            if y_numeric:
+                for x in xs:
+                    y_samples.setdefault(x, []).append(y_number)
+            if not x_numeric and not y_numeric:
+                for x in xs:
+                    for y in ys:
+                        counts[(x, y)] += 1
+    if x_numeric or y_numeric:
+        numeric_summaries = []
+        if x_numeric:
+            numeric_summaries.append({"axis": "x", "groups": _summaries(x_samples)})
+        if y_numeric:
+            numeric_summaries.append({"axis": "y", "groups": _summaries(y_samples)})
+        return {"paired_completions": paired, "x_values": [], "y_values": [], "cells": [],
+                "numeric_summaries": numeric_summaries}
     x_values = sorted({x for x, _ in counts})
     y_values = sorted({y for _, y in counts})
     return {"paired_completions": paired, "x_values": x_values, "y_values": y_values,
