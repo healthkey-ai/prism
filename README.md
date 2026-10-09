@@ -50,7 +50,7 @@ Filter patients by:
 analytics/
 ├── backend/                    # Django + DRF API
 │   ├── analytics_project/      # Django project settings and URLs
-│   ├── patients/               # Unmanaged PatientInfo model (reads patient_info view)
+│   ├── patients/               # Unmanaged PatientRecord read model (reads patient_record table)
 │   ├── cohorts/                # Cohort filter logic and form settings endpoint
 │   └── metrics/                # Analytics computation services
 │       └── services/
@@ -142,7 +142,7 @@ gunicorn analytics_project.wsgi:application --bind 0.0.0.0:$PORT
 
 ## Database
 
-The backend connects to a PROMOP PostgreSQL instance and reads from the `patient_info` denormalized view via an unmanaged Django model. Connection settings live in `backend/analytics_project/settings.py`.
+The backend connects to a PROMOP PostgreSQL instance and reads PatientRecord data from the `patient_record` table via an unmanaged Django model. Connection settings live in `backend/analytics_project/settings.py`.
 
 ## Citing PRism
 

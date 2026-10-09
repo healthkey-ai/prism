@@ -26,7 +26,7 @@ Switch with `/model claude-opus-4-8` or toggle `/fast`.
 ## Project Overview
 
 **PRism** is a read-only oncology analytics platform that:
-- Mirrors clinical patient records into a PostgreSQL read model (`PatientInfo`, `managed=False`)
+- Mirrors PROMOP PatientRecord data through an unmanaged PostgreSQL read model (`managed=False`)
 - Exposes a DRF REST API consumed by a React TypeScript frontend
 - Computes survival curves (KM), treatment patterns, TTNT, and subgroup statistics
 - Deploys to Render (backend + frontend static)
@@ -42,7 +42,7 @@ Switch with `/model claude-opus-4-8` or toggle `/fast`.
 
 | Concern | File(s) |
 |---|---|
-| Read model | `backend/patients/models.py` — `PatientInfo` (`managed=False`) |
+| PatientRecord read model | `backend/patients/models.py` — unmanaged mirror of `patient_record` |
 | Cohort filtering | `backend/cohorts/filters.py` — `apply_cohort_filters` |
 | Shared clinical Q objects | `backend/metrics/services/clinical_filters.py` — `HIGH_RISK_CYTO`, `HAS_SCT`, `NO_SCT` |
 | KM estimator | `backend/metrics/services/km_utils.py` — `km_curve`, `km_median`, `km_result` |
@@ -234,8 +234,8 @@ const chartData = useMemo(
 
 ## DB / Model Conventions
 
-- `PatientInfo` uses `managed=False` — there are no Django migrations for it. Schema changes are applied directly to the database.
-- Service functions receive a queryset (`qs`) and apply `.filter()` / `.exclude()` / `.values_list()` / `.values()` against it. Never do `PatientInfo.objects.all()` inside a service — accept the queryset from the view layer so cohort filters compose correctly.
+- The PatientRecord read model uses `managed=False` — there are no Django migrations for it. Schema changes are applied directly to the database.
+- Service functions receive a queryset (`qs`) and apply `.filter()` / `.exclude()` / `.values_list()` / `.values()` against it. Never query all PatientRecord rows inside a service — accept the queryset from the view layer so cohort filters compose correctly.
 - The `patient_record` table (PROMOP's patient record) is read-only for this app. Never write to it from the analytics app.
 
 ---

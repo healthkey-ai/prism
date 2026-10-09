@@ -50,7 +50,7 @@ npm test -- --run
 
 ## Code Conventions
 
-- **Backend**: Follow existing patterns in `backend/metrics/services/`. New analytics services accept a queryset and return a plain Python dict. Never call `PatientInfo.objects.all()` inside a service — accept the queryset from the view layer.
+- **Backend**: Follow existing patterns in `backend/metrics/services/`. New analytics services accept a queryset and return a plain Python dict. Never query all PatientRecord rows inside a service — accept the queryset from the view layer.
 - **Shared clinical Q objects**: Import `HIGH_RISK_CYTO`, `HAS_SCT`, `NO_SCT` from `metrics.services.clinical_filters` — never redefine them inline.
 - **KM estimator**: Use `km_result` from `metrics.services.km_utils` — never reimplement.
 - **Frontend**: New chart components use `NonNullable<MetricsResponse['field']>` for props and wrap `mergeKMCurves` in `useMemo`.
