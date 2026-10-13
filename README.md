@@ -24,15 +24,45 @@ Filter patients by:
 - Lab ranges: hemoglobin, β2-microglobulin, albumin, creatinine
 - Diagnosis year range, smoking status
 
-### Dashboard Panels
-- **Response Rates** — stacked bar by therapy and outcome (CR/VGPR/PR/MR/SD/PD), switchable across 1L/2L/3L+, with chart/table toggle and ORR%
-- **Treatment Patterns** — 1st-line regimen frequency
-- **Lines of Therapy** — funnel (% reaching each line) + distribution donut
-- **Patient Demographics** — age buckets, gender donut, ethnicity and geographic distribution
-- **Disease Staging** — ISS stage donut, ECOG bar, cytogenetic markers (high-risk highlighted), CRAB criteria, bone lesions, ASCT rate
-- **Laboratory Values** — box plots (median/IQR/range) for 9 key lab values
-- **Treatment Duration** — median months by therapy+outcome (top 15), time-to-first-treatment distribution
-- **Top Treatment Sequences** — most common multi-line therapy paths (e.g. VRd → Daratumumab → Cilta-cel)
+### Cohort Characterization (Table 1)
+- **Cohort summary** — structured Table 1 with age (median, Q1/Q3), sex, receptor status (ER+/HER2+/TNBC), stage distribution, ECOG, MRD status, 2L/3L treatment rates, and key lab values
+- **Current disease state** — mutually exclusive classification into Relapsed/Refractory, In Remission, Watch & Wait, Newly Diagnosed, or Other/Unknown
+- **Eligibility funnel** — step-by-step patient counts showing how many patients remain after each filter criterion
+- **Incidence over time** — quarterly time series of new diagnoses and treatment starts
+
+### Survival & Time-to-Event
+- **Overall Survival (OS)** — Kaplan-Meier from first-line start to death
+- **Progression-Free Survival (PFS)** — KM from first-line start to first progression or death
+- **Event-Free Survival (EFS)** — KM from first-line start to treatment change, 1L progression, or death
+- **Duration of Response (DOR)** — KM restricted to confirmed responders (CR/sCR/VGPR/PR/MR), first and second line
+- **Landmark OS** — OS restricted to patients surviving past a configurable landmark (default 6 months), time-shifted KM
+- **POD24** — Progression within 24 months of 1L; classifies patients and compares OS via 24-month landmark analysis
+- **Subgroup survival** — stratified KM (OS + PFS) by ISS/R-ISS stage, cytogenetic risk (High vs. Standard), SCT status, and MRD status; log-rank p-values per split
+- **Forest plot** — per-subgroup OS hazard ratios with 95% CI (Peto method) across cytogenetic risk, stage, SCT, age ≥65, and MRD status
+- **Time-to-Next-Therapy (TTNT)** — KM from end of 1L to start of 2L, and from end of 2L to start of 3L+
+- **Time to treatment** — diagnosis-to-first-treatment delay: median days and histogram
+- **Treatment duration** — per-therapy median and mean duration (months) by line; diagnosis-to-1L start distribution
+
+### Treatment Patterns
+- **Line-of-therapy breakdown** — therapy counts and percentages at first, second, and later lines; overall counts across any line
+- **Treatment burden** — line funnel (≥1L through ≥4L), median lines of therapy, ≥2L% and ≥3L%
+- **Top treatment sequences** — most common 1L → 2L → 3L therapy paths (top 12), e.g. VRd → Daratumumab → Cilta-cel
+- **Treatment switching flows** — regimen-to-regimen switching from 1L→2L and 2L→3L+ with counts and percentages
+- **Pathway sunburst** — hierarchical 1L → 2L → 3L treatment pathway tree
+- **Pathway outcomes** — OS curves for the top 5 (1L → 2L) treatment pathways (≥10 patients each)
+
+### Response & Outcomes
+- **Response rates** — CR, VGPR, PR, MR, SD, PD counts and ORR (CR+VGPR+PR%) per therapy at each line; chart/table toggle
+- **Landmark response** — CR rate at configurable landmarks (default 12, 24, 30, 36 months from 1L start)
+- **Therapy categories** — Bispecific antibody, CAR-T, ADC, chemotherapy, IMiD, monoclonal antibody, targeted/small molecule, and endocrine agent counts per line
+
+### Demographics & Staging
+- **Patient demographics** — age bucket histogram, gender donut, race, ethnicity, and geographic distribution (top 15 regions), smoking status
+- **Disease staging** — ISS/R-ISS stage distribution, ECOG performance status, CRAB criteria, cytogenetic marker breakdown (del(17p), t(4;14), t(14;16), 1q21, hyperdiploidy; high-risk highlighted), SCT rate, bone lesion types, refractory status
+- **Laboratory values** — box plots (median/IQR/range) for hemoglobin, β2-microglobulin, albumin, creatinine, LDH, M-protein, calcium, and kappa/lambda FLC
+
+### Disease-Specific Panels
+- **FL → DLBCL transformation** *(Follicular Lymphoma only)* — transformation rate, time-to-transformation histogram, post-transformation outcome distribution, and OS from transformation date
 
 ## Stack
 
@@ -47,19 +77,40 @@ Filter patients by:
 ## Project Structure
 
 ```
-analytics/
+prism/
 ├── backend/                    # Django + DRF API
 │   ├── analytics_project/      # Django project settings and URLs
+│   ├── accounts/               # Identity model, JWT auth
 │   ├── patients/               # Unmanaged PatientRecord read model (reads patient_record table)
-│   ├── cohorts/                # Cohort filter logic and form settings endpoint
+│   ├── cohorts/                # Cohort filter logic, saved views, disease normalization
 │   └── metrics/                # Analytics computation services
+│       ├── views.py            # /api/metrics/ endpoint
+│       ├── tests/              # pytest tests per service
 │       └── services/
-│           ├── response_rates.py
-│           ├── treatment_patterns.py
-│           ├── demographics.py
-│           ├── staging.py
-│           ├── labs.py
-│           └── treatment_duration.py
+│           ├── survival.py           # OS / PFS / EFS KM curves
+│           ├── subgroup_survival.py  # Stratified KM by stage / cyto / SCT / MRD
+│           ├── dor.py                # Duration of Response
+│           ├── pod24.py              # Progression within 24 months
+│           ├── forest_plot.py        # Hazard ratios with 95% CI
+│           ├── ttnt.py               # Time-to-Next-Therapy
+│           ├── time_to_treatment.py  # Diagnosis-to-treatment delay
+│           ├── treatment_duration.py # Per-therapy duration by outcome
+│           ├── landmark_response.py  # CR rate at landmark timepoints
+│           ├── treatment_patterns.py # Line breakdown, sequences, burden
+│           ├── switching.py          # Regimen-to-regimen switching flows
+│           ├── pathway_sunburst.py   # Hierarchical pathway tree
+│           ├── pathway_outcomes.py   # OS per top pathway
+│           ├── response_rates.py     # ORR / CR / VGPR / PR by therapy
+│           ├── therapy_categories.py # MOA category counts per line
+│           ├── demographics.py       # Age, sex, race, region
+│           ├── cohort_characterization.py  # Table 1
+│           ├── staging.py            # Stage, ECOG, cyto, SCT, CRAB
+│           ├── labs.py               # Lab value distributions
+│           ├── disease_state.py      # Current disease state classification
+│           ├── eligibility.py        # Filter funnel
+│           ├── incidence.py          # Quarterly diagnosis/treatment trends
+│           ├── transformation.py     # FL → DLBCL transformation (FL only)
+│           └── km_utils.py           # Shared KM estimator
 ├── frontend/                   # React SPA
 │   └── src/
 │       ├── components/
@@ -70,6 +121,7 @@ analytics/
 │       ├── hooks/
 │       │   └── useAnalytics.ts # State management + 400ms debounced API calls
 │       ├── api/client.ts       # Axios client + filter serialization
+│       ├── utils/kmChartUtils.ts  # mergeKMCurves shared utility
 │       └── types/index.ts      # Shared TypeScript interfaces
 └── seed_mm_patients.py         # Seeds 100 realistic MM patients into PROMOP
 ```
