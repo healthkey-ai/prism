@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Sign-up no longer takes over existing accounts.** Signing up with the address of a local identity that has no password (an invited patient, an operator-created account) used to set the caller's password on it and sign them in, with no proof they owned the address. Sign-up now leaves that account untouched, returns `202`, and emails a single-use link to the address; the password is set only when the owner follows it. Using any password link now invalidates the account's other outstanding links.
+- **`SIGNUP_ENABLED`** (default `true`) turns self-service sign-up off for deployments where only operators create accounts. The login page reads it from `GET /api/auth/config/` and hides the Sign Up tab.
+
 ### Planned
 
 - **OHDSI Atlas cohort export** — export a saved PRism cohort as an Atlas-compatible Circe JSON definition via `GET /api/cohorts/saved/{id}/export/atlas/`. Enables cohorts defined in PRism's point-and-click UI to be executed in OHDSI tools (PatientLevelPrediction, CohortMethod). Requires a concept mapping layer from PROMOP field values to OMOP vocabulary concept IDs.

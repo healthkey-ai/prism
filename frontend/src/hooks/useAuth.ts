@@ -7,7 +7,8 @@ export interface AuthState {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  signup: (email: string, password: string, name: string) => Promise<void>
+  /** Resolves to a message when no account was created and the user must check their email. */
+  signup: (email: string, password: string, name: string) => Promise<string | null>
   setUser: (user: User) => void
 }
 
@@ -33,8 +34,10 @@ export function useAuth(): AuthState {
   }, [])
 
   const signup = useCallback(async (email: string, password: string, name: string) => {
-    const data = await api.signup(email, password, name)
-    setUser(data)
+    const result = await api.signup(email, password, name)
+    if (!result.created) return result.detail
+    setUser(result.user)
+    return null
   }, [])
 
   return { user, loading, login, logout, signup, setUser }

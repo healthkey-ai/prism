@@ -6,6 +6,7 @@ urlpatterns = [
     path("logout/", views.logout_view),
     path("signup/", views.signup_view),
     path("user/", views.me_view),
+    path("config/", views.auth_config_view),
     path("organizations/", views.organizations_view),
     path("my-orgs/", views.my_orgs_view),
     path("password-reset/", views.password_reset_request_view),
