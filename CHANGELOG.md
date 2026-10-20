@@ -5,23 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.0.1] — 2026-07-05
+## [Unreleased]
 
-### Fixed
-- Django migration `0004_remove_userprofile` now includes `granted_at = NOW()` in the `group_access` INSERT. The production PROMOP database has a `NOT NULL` constraint on that column which the dev database lacks, causing deploys against the production schema to fail with an integrity error.
+### Planned
+
+- **OHDSI Atlas cohort export** — export a saved PRism cohort as an Atlas-compatible Circe JSON definition via `GET /api/cohorts/saved/{id}/export/atlas/`. Enables cohorts defined in PRism's point-and-click UI to be executed in OHDSI tools (PatientLevelPrediction, CohortMethod). Requires a concept mapping layer from PROMOP field values to OMOP vocabulary concept IDs.
 
 ---
 
-## [Unreleased]
+## [1.0.2] — 2026-10-20
 
 ### Security
 
 - **Sign-up no longer takes over existing accounts.** Signing up with the address of a local identity that has no password (an invited patient, an operator-created account) used to set the caller's password on it and sign them in, with no proof they owned the address. Sign-up now leaves that account untouched, returns `202`, and emails a single-use link to the address; the password is set only when the owner follows it. Using any password link now invalidates the account's other outstanding links.
 - **`SIGNUP_ENABLED`** (default `true`) turns self-service sign-up off for deployments where only operators create accounts. The login page reads it from `GET /api/auth/config/` and hides the Sign Up tab.
 
-### Planned
+### Added
+- Staff survey crosstabulation, rendered as an X-Y heatmap, including structured ranking, number and date questions.
+- Mean and standard deviation for numeric survey answers; ECOG survey choices are treated as numeric scores.
 
-- **OHDSI Atlas cohort export** — export a saved PRism cohort as an Atlas-compatible Circe JSON definition via `GET /api/cohorts/saved/{id}/export/atlas/`. Enables cohorts defined in PRism's point-and-click UI to be executed in OHDSI tools (PatientLevelPrediction, CohortMethod). Requires a concept mapping layer from PROMOP field values to OMOP vocabulary concept IDs.
+### Fixed
+- MM-only fields (CRAB/ASCT) are hidden from the FL staging panel (#49).
+- Analytics support the renamed PROMOP cytogenetics column (#51).
+- Survival follow-up renders when no deaths are recorded (#52).
+- Duplicate saved cohort names are rejected (#55).
+
+---
+
+## [1.0.1] — 2026-07-05
+
+### Fixed
+- Django migration `0004_remove_userprofile` now includes `granted_at = NOW()` in the `group_access` INSERT. The production PROMOP database has a `NOT NULL` constraint on that column which the dev database lacks, causing deploys against the production schema to fail with an integrity error.
 
 ---
 
