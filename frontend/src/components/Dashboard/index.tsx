@@ -107,7 +107,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
     { id: 'outcomes',   label: 'Outcomes' },
     { id: 'treatments', label: 'Treatments' },
     { id: 'profile',    label: 'Patient Profile' },
-    ...(user.is_staff ? [{ id: 'surveys' as const, label: 'Surveys' }] : []),
+    ...(user.can_view_surveys ? [{ id: 'surveys' as const, label: 'Surveys' }] : []),
   ]
 
   function toFilterParams(): URLSearchParams {

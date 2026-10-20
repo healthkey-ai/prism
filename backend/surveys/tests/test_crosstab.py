@@ -6,7 +6,9 @@ from django.db import connection
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from surveys.models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse, SurveyVersion
+from surveys.models import (
+    Survey, SurveyAnswer, SurveyOption, SurveyOrganization, SurveyQuestion, SurveyResponse, SurveyVersion,
+)
 from surveys.services import crosstab, map_fl_treatment, question_catalog, survey_catalog
 
 
@@ -47,7 +49,7 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     SurveyAnswer.objects.create(response=draft, question_key="treatments", value={"options": ["br"]})
     SurveyAnswer.objects.create(response=draft, question_key="country", value={"option": "gb"})
 
-    assert survey_catalog() == [{"id": str(survey.pk), "title": "FL survey", "completions": 1}]
+    assert survey_catalog(Survey.objects.all()) == [{"id": str(survey.pk), "title": "FL survey", "completions": 1}]
     assert [q["key"] for q in question_catalog(survey)] == ["treatments", "country"]
     result = crosstab(survey, "treatments", "country")
     assert result["paired_completions"] == 1
@@ -62,6 +64,43 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     client.force_authenticate(user=SimpleNamespace(is_staff=True, is_authenticated=True))
     assert client.get(f"/api/surveys/{survey.pk}/crosstab/?x=story&y=country").status_code == 400
     assert client.get(f"/api/surveys/{survey.pk}/crosstab/?x=treatments&y=country").json() == result
+
+
+def _submitted_survey(slug):
+    survey = Survey.objects.create(id=uuid.uuid4(), slug=slug, title=slug.upper())
+    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
+    for order, key in enumerate(["a", "b"]):
+        question = SurveyQuestion.objects.create(survey_version=version, key=key, type="single",
+                                                 order=order, text=key)
+        SurveyOption.objects.create(question=question, key="yes", order=0, label="Yes", free_text=False)
+    response = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+    for key in ["a", "b"]:
+        SurveyAnswer.objects.create(response=response, question_key=key, value={"option": "yes"})
+    return survey
+
+
+@pytest.mark.django_db
+def test_org_analysts_see_only_their_own_orgs_surveys(survey_tables, monkeypatch):
+    flf, other, unowned = _submitted_survey("flf"), _submitted_survey("other"), _submitted_survey("unowned")
+    SurveyOrganization.objects.create(survey=flf, organization_id=1)
+    SurveyOrganization.objects.create(survey=other, organization_id=2)
+    # An org_admin or analyst of org 1 only.
+    for target in ("accounts.permissions.get_analytics_org_ids", "surveys.views.get_analytics_org_ids"):
+        monkeypatch.setattr(target, lambda user: [1])
+
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_staff=False, is_authenticated=True))
+    assert [s["title"] for s in client.get("/api/surveys/").json()] == ["FLF"]
+    assert client.get(f"/api/surveys/{flf.pk}/questions/").status_code == 200
+    assert client.get(f"/api/surveys/{flf.pk}/crosstab/?x=a&y=b").json()["paired_completions"] == 1
+    for hidden in (other, unowned):
+        # Another org's survey, and one nobody owns, look the same as a missing one.
+        assert client.get(f"/api/surveys/{hidden.pk}/questions/").status_code == 404
+        assert client.get(f"/api/surveys/{hidden.pk}/crosstab/?x=a&y=b").status_code == 404
+
+    client.force_authenticate(user=SimpleNamespace(is_staff=True, is_authenticated=True))
+    assert [s["title"] for s in client.get("/api/surveys/").json()] == ["FLF", "OTHER", "UNOWNED"]
+    assert client.get(f"/api/surveys/{unowned.pk}/crosstab/?x=a&y=b").status_code == 200
 
 
 @pytest.mark.parametrize("description, expected", [

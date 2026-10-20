@@ -1,5 +1,7 @@
-"""Read-only mirrors of PROMOP's PROlog survey tables."""
+"""Read-only mirrors of PROMOP's PROlog survey tables, and which org owns each survey."""
 from django.db import models
+
+from accounts.promop_models import PromopOrganization
 
 
 class Survey(models.Model):
@@ -10,6 +12,9 @@ class Survey(models.Model):
     class Meta:
         managed = False
         db_table = "prolog_surveys_survey"
+
+    def __str__(self):
+        return self.title
 
 
 class SurveyVersion(models.Model):
@@ -64,3 +69,26 @@ class SurveyAnswer(models.Model):
     class Meta:
         managed = False
         db_table = "prolog_surveys_surveyanswer"
+
+
+class SurveyOrganization(models.Model):
+    """The organisation that owns a survey's results. PRism owns this table.
+
+    PROlog surveys carry no organisation, so staff record here whose survey it
+    is. The owning org's org_admin and analyst users see the survey's
+    aggregates; a survey with no owner is visible to staff only.
+    """
+    # No database constraints: both tables belong to PROMOP, and PRism's
+    # migrate can run before PROMOP has created them.
+    survey = models.OneToOneField(
+        Survey, on_delete=models.DO_NOTHING, db_constraint=False, related_name="ownership",
+    )
+    organization = models.ForeignKey(
+        PromopOrganization, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+",
+    )
+
+    class Meta:
+        db_table = "prism_survey_organization"
+
+    def __str__(self):
+        return f"{self.survey} → {self.organization}"

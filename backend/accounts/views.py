@@ -17,6 +17,7 @@ from rest_framework import status
 logger = logging.getLogger(__name__)
 
 from .models import Identity, Organization, PasswordResetToken
+from .permissions import can_view_org_analytics
 from .utils import has_org_admin_access
 
 
@@ -268,5 +269,6 @@ def _user_data(user):
         "is_staff":   user.is_staff,
         "is_premium": is_premium,
         "is_org_admin": is_org_admin,
+        "can_view_surveys": can_view_org_analytics(user),
         "role":       "admin" if user.is_superuser else "staff" if user.is_staff else "user",
     }

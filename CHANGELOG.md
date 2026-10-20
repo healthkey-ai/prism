@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Survey analytics for an organisation's own people.** Users with an unexpired `org_admin` or `analyst` grant on an active organisation can now open the Surveys tab, scoped to that organisation's surveys; staff still see every survey. PROlog surveys carry no organisation, so staff record which organisation owns each survey in the admin (**Survey organizations**, table `prism_survey_organization`). A survey with no owner stays staff-only, and another organisation's survey answers 404. Group grants, trusted domains and public organisations do not open survey analytics. `GET /api/auth/me/` gains `can_view_surveys`.
+
 ### Fixed
 - **First `migrate` on a database PRomop already owns** no longer fails with `InconsistentMigrationHistory` (#64). PRomop records `admin.0001_initial`, which in PRism depends on `accounts.0001`; `accounts` now overrides `migrate` to apply that idempotent migration first, only in exactly that state.
 
