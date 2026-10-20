@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **First `migrate` on a database PRomop already owns** no longer fails with `InconsistentMigrationHistory` (#64). PRomop records `admin.0001_initial`, which in PRism depends on `accounts.0001`; `accounts` now overrides `migrate` to apply that idempotent migration first, only in exactly that state.
+
 ### Planned
 
 - **OHDSI Atlas cohort export** — export a saved PRism cohort as an Atlas-compatible Circe JSON definition via `GET /api/cohorts/saved/{id}/export/atlas/`. Enables cohorts defined in PRism's point-and-click UI to be executed in OHDSI tools (PatientLevelPrediction, CohortMethod). Requires a concept mapping layer from PROMOP field values to OMOP vocabulary concept IDs.
