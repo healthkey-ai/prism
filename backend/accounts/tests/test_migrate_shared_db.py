@@ -15,9 +15,17 @@ from accounts.management.commands.migrate import (
 pytestmark = pytest.mark.django_db
 
 
+# PRism's own apps. PRomop's migrate records none of them.
+PRISM_APPS = ["accounts", "cohorts", "surveys"]
+
+
 def _forget_accounts_migrations():
-    """Leave django_migrations as PRomop's migrate leaves it: admin, no accounts."""
-    MigrationRecorder(connection).migration_qs.filter(app="accounts").delete()
+    """Leave django_migrations as PRomop's migrate leaves it: admin, none of PRism's apps.
+
+    Forgetting accounts alone would leave PRism apps recorded whose migrations
+    depend on later accounts migrations, a state no real database is in.
+    """
+    MigrationRecorder(connection).migration_qs.filter(app__in=PRISM_APPS).delete()
 
 
 def test_migrate_is_the_accounts_override():
