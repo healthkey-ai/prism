@@ -122,6 +122,10 @@ if os.environ.get("MAILGUN_SENDER_DOMAIN"):
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@healthkey.ai")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://prism.healthkey.ai")
 
+# Self-service sign-up. Set SIGNUP_ENABLED=false on deployments where accounts
+# are created only by an operator.
+SIGNUP_ENABLED = os.environ.get("SIGNUP_ENABLED", "true").lower() in ("1", "true", "yes")
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_TZ = True

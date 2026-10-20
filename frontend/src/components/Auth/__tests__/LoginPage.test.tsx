@@ -1,8 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import LoginPage from '../LoginPage'
 import type { AuthState } from '../../../hooks/useAuth'
+import { fetchAuthConfig } from '../../../api/client'
+
+vi.mock('../../../api/client', () => ({
+  fetchAuthConfig: vi.fn().mockResolvedValue({ signup_enabled: true }),
+  requestPasswordReset: vi.fn(),
+}))
 
 function makeAuth(overrides?: Partial<AuthState>): AuthState {
   return {
@@ -16,7 +22,10 @@ function makeAuth(overrides?: Partial<AuthState>): AuthState {
 }
 
 describe('LoginPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(fetchAuthConfig).mockResolvedValue({ signup_enabled: true })
+  })
 
   describe('initial render (Sign In mode)', () => {
     it('renders the Sign In tab button', () => {
@@ -152,6 +161,32 @@ describe('LoginPage', () => {
       await userEvent.click(screen.getAllByRole('button', { name: 'Sign In' }).at(-1)!)
 
       expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument()
+    })
+  })
+
+  describe('signup for an existing account', () => {
+    it('shows the setup-link notice instead of signing in', async () => {
+      const signup = vi.fn().mockResolvedValue('We have sent a link to that address.')
+      render(<LoginPage auth={makeAuth({ signup })} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Sign Up' }))
+      await userEvent.type(screen.getByPlaceholderText('you@example.com'), 'invited@example.com')
+      const [passwordInput, confirmInput] = screen.getAllByPlaceholderText('••••••••')
+      await userEvent.type(passwordInput, 'StrongPass123!')
+      await userEvent.type(confirmInput, 'StrongPass123!')
+      await userEvent.click(screen.getByRole('button', { name: 'Create Account' }))
+
+      expect(await screen.findByText('We have sent a link to that address.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Create Account' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('signup disabled', () => {
+    it('hides the Sign Up tab when the server reports sign-up is off', async () => {
+      vi.mocked(fetchAuthConfig).mockResolvedValue({ signup_enabled: false })
+      render(<LoginPage auth={makeAuth()} />)
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Sign Up' })).not.toBeInTheDocument(),
+      )
     })
   })
 })

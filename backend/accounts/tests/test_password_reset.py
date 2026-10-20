@@ -112,3 +112,24 @@ def test_password_reset_confirm_weak_password(client):
 def test_password_reset_confirm_missing_fields(client):
     resp = client.post("/api/auth/password-reset/confirm/", {}, content_type="application/json")
     assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_password_reset_confirm_invalidates_other_outstanding_links(client):
+    user = _make_user()
+    used = PasswordResetToken.objects.create(identity=user)
+    other = PasswordResetToken.objects.create(identity=user)
+    resp = client.post(
+        "/api/auth/password-reset/confirm/",
+        {"token": str(used.token), "password": "NewStr0ngPassw0rd!99"},
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    other.refresh_from_db()
+    assert other.used_at is not None
+    resp = client.post(
+        "/api/auth/password-reset/confirm/",
+        {"token": str(other.token), "password": "Another0neStr0ng!77"},
+        content_type="application/json",
+    )
+    assert resp.status_code == 400

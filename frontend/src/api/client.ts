@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { CohortFilters, FormSettings, MetricsResponse, SavedCohort } from '../types'
+import type { CohortFilters, FormSettings, MetricsResponse, SavedCohort, User } from '../types'
 
 export interface SurveySummary { id: string; title: string; completions: number }
 export interface SurveyQuestion { key: string; text: string; type: string }
@@ -103,8 +103,18 @@ export async function logout() {
   await api.post('/auth/logout/')
 }
 
-export async function signup(email: string, password: string, name: string) {
-  const { data } = await api.post('/auth/signup/', { email, password, name })
+export type SignupResult =
+  | { created: true; user: User }
+  // An account already exists for the address; a setup link may have been emailed.
+  | { created: false; detail: string }
+
+export async function signup(email: string, password: string, name: string): Promise<SignupResult> {
+  const { status, data } = await api.post('/auth/signup/', { email, password, name })
+  return status === 201 ? { created: true, user: data } : { created: false, detail: data.detail }
+}
+
+export async function fetchAuthConfig(): Promise<{ signup_enabled: boolean }> {
+  const { data } = await api.get<{ signup_enabled: boolean }>('/auth/config/')
   return data
 }
 

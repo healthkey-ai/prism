@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AuthState } from '../../hooks/useAuth'
-import { requestPasswordReset } from '../../api/client'
+import { fetchAuthConfig, requestPasswordReset } from '../../api/client'
 
 interface Props {
   auth: AuthState
@@ -15,11 +15,23 @@ export default function LoginPage({ auth }: Props) {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [signupNotice, setSignupNotice] = useState('')
+  // The server enforces SIGNUP_ENABLED either way; this only hides the tab.
+  const [signupEnabled, setSignupEnabled] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAuthConfig()
+      .then(config => { if (!cancelled) setSignupEnabled(config.signup_enabled) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   function switchMode(m: 'login' | 'signup' | 'forgot') {
     setMode(m)
     setError('')
     setResetSent(false)
+    setSignupNotice('')
     setConfirmPassword('')
   }
 
@@ -37,7 +49,8 @@ export default function LoginPage({ auth }: Props) {
       if (mode === 'login') {
         await auth.login(email, password)
       } else if (mode === 'signup') {
-        await auth.signup(email, password, name)
+        const notice = await auth.signup(email, password, name)
+        if (notice) setSignupNotice(notice)
       } else {
         await requestPasswordReset(email)
         setResetSent(true)
@@ -61,7 +74,7 @@ export default function LoginPage({ auth }: Props) {
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-5">
           {mode !== 'forgot' && (
             <div className="flex rounded-lg border border-slate-700 p-0.5 bg-slate-900/50">
-              {(['login', 'signup'] as const).map(m => (
+              {(signupEnabled ? (['login', 'signup'] as const) : (['login'] as const)).map(m => (
                 <button
                   key={m}
                   onClick={() => switchMode(m)}
@@ -92,6 +105,8 @@ export default function LoginPage({ auth }: Props) {
             <p className="text-sm text-slate-300 leading-relaxed">
               If that email is registered you will receive a reset link shortly. Check your inbox.
             </p>
+          ) : mode === 'signup' && signupNotice ? (
+            <p className="text-sm text-slate-300 leading-relaxed">{signupNotice}</p>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === 'signup' && (

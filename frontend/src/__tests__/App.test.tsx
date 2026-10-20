@@ -18,6 +18,7 @@ vi.mock('../api/client', () => ({
   login:             vi.fn(),
   logout:            vi.fn(),
   signup:            vi.fn(),
+  fetchAuthConfig:   vi.fn().mockResolvedValue({ signup_enabled: true }),
   createSavedCohort: vi.fn(),
   updateSavedCohort: vi.fn(),
   deleteSavedCohort: vi.fn(),

@@ -1,9 +1,14 @@
 import pytest
+from django.core import mail
+
+from accounts.models import Identity, PasswordResetToken
 
 LOGIN_URL = "/api/auth/login/"
 SIGNUP_URL = "/api/auth/signup/"
 LOGOUT_URL = "/api/auth/logout/"
 ME_URL = "/api/auth/user/"
+CONFIG_URL = "/api/auth/config/"
+CONFIRM_URL = "/api/auth/password-reset/confirm/"
 
 
 @pytest.mark.django_db
@@ -28,45 +33,94 @@ class TestSignupView:
         resp = api_client.post(SIGNUP_URL, {"email": "dup@example.com", "password": "StrongPass123!"})
         assert resp.status_code == 400
 
-    def test_unusable_promop_placeholder_is_claimed(self, api_client, make_user):
+    def test_placeholder_is_not_claimed_by_signup(self, api_client, make_user):
+        # An operator-created or invited account without a password must not
+        # be taken over by whoever signs up with its address.
         placeholder = make_user(email="invited@example.com", password=None, name="")
-        assert not placeholder.has_usable_password()
 
         resp = api_client.post(
             SIGNUP_URL,
-            {
-                "email": "invited@example.com",
-                "password": "StrongPass123!",
-                "name": "Invited User",
-            },
+            {"email": "invited@example.com", "password": "StrongPass123!", "name": "Attacker"},
         )
 
-        assert resp.status_code == 201
+        assert resp.status_code == 202
+        assert "uid" not in resp.data
         placeholder.refresh_from_db()
-        assert resp.data["uid"] == placeholder.uid
-        assert placeholder.name == "Invited User"
-        assert placeholder.check_password("StrongPass123!")
-
-    def test_claimed_placeholder_can_log_in(self, api_client, make_user):
-        placeholder = make_user(email="login-invited@example.com", password=None)
-
-        signup_resp = api_client.post(
-            SIGNUP_URL,
-            {
-                "email": "login-invited@example.com",
-                "password": "StrongPass123!",
-                "name": "Login Invited",
-            },
-        )
-        assert signup_resp.status_code == 201
+        assert not placeholder.has_usable_password()
+        assert placeholder.name == ""
+        assert "_auth_user_id" not in api_client.session
 
         login_resp = api_client.post(
-            LOGIN_URL,
-            {"email": "login-invited@example.com", "password": "StrongPass123!"},
+            LOGIN_URL, {"email": "invited@example.com", "password": "StrongPass123!"}
+        )
+        assert login_resp.status_code == 401
+
+    def test_placeholder_owner_gets_setup_link(self, api_client, make_user):
+        placeholder = make_user(email="invited@example.com", password=None)
+
+        resp = api_client.post(
+            SIGNUP_URL, {"email": "invited@example.com", "password": "StrongPass123!"}
         )
 
+        assert resp.status_code == 202
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == ["invited@example.com"]
+        token_obj = PasswordResetToken.objects.get(identity=placeholder)
+        assert str(token_obj.token) in mail.outbox[0].body
+
+        confirm = api_client.post(
+            CONFIRM_URL, {"token": str(token_obj.token), "password": "OwnerPass456!"}
+        )
+        assert confirm.status_code == 200
+        assert confirm.data["uid"] == placeholder.uid
+
+        login_resp = api_client.post(
+            LOGIN_URL, {"email": "invited@example.com", "password": "OwnerPass456!"}
+        )
         assert login_resp.status_code == 200
         assert login_resp.data["uid"] == placeholder.uid
+
+    def test_staff_placeholder_gets_setup_link(self, api_client, make_user):
+        # Staff are claimed like anyone else: only through the emailed link.
+        placeholder = make_user(email="staff@example.com", password=None, is_staff=True)
+
+        resp = api_client.post(
+            SIGNUP_URL, {"email": "staff@example.com", "password": "StrongPass123!"}
+        )
+
+        assert resp.status_code == 202
+        assert len(mail.outbox) == 1
+        placeholder.refresh_from_db()
+        assert not placeholder.has_usable_password()
+
+    def test_inactive_placeholder_gets_no_link(self, api_client, make_user):
+        placeholder = make_user(email="gone@example.com", password=None, is_active=False)
+
+        resp = api_client.post(
+            SIGNUP_URL, {"email": "gone@example.com", "password": "StrongPass123!"}
+        )
+
+        # Same response as the active case, so it does not reveal the account's state.
+        assert resp.status_code == 202
+        assert len(mail.outbox) == 0
+        assert not PasswordResetToken.objects.filter(identity=placeholder).exists()
+
+    def test_signup_disabled_returns_403_and_creates_nothing(self, api_client, settings):
+        settings.SIGNUP_ENABLED = False
+        resp = api_client.post(
+            SIGNUP_URL, {"email": "new@example.com", "password": "StrongPass123!"}
+        )
+        assert resp.status_code == 403
+        assert not Identity.objects.filter(email="new@example.com").exists()
+
+    def test_signup_disabled_does_not_send_setup_link(self, api_client, make_user, settings):
+        settings.SIGNUP_ENABLED = False
+        make_user(email="invited@example.com", password=None)
+        resp = api_client.post(
+            SIGNUP_URL, {"email": "invited@example.com", "password": "StrongPass123!"}
+        )
+        assert resp.status_code == 403
+        assert len(mail.outbox) == 0
 
     def test_missing_email_rejected(self, api_client):
         resp = api_client.post(SIGNUP_URL, {"password": "StrongPass123!"})
@@ -155,3 +209,14 @@ class TestMeView:
     def test_unauthenticated_returns_403(self, api_client):
         resp = api_client.get(ME_URL)
         assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+class TestAuthConfigView:
+    def test_reports_signup_enabled(self, api_client, settings):
+        settings.SIGNUP_ENABLED = True
+        assert api_client.get(CONFIG_URL).data == {"signup_enabled": True}
+
+    def test_reports_signup_disabled(self, api_client, settings):
+        settings.SIGNUP_ENABLED = False
+        assert api_client.get(CONFIG_URL).data == {"signup_enabled": False}
