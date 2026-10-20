@@ -5,6 +5,7 @@ export interface User {
   is_staff: boolean
   is_premium: boolean
   is_org_admin: boolean
+  can_view_surveys: boolean
   role: 'user' | 'staff' | 'admin'
 }
 

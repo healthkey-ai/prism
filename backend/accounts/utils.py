@@ -204,6 +204,47 @@ def get_admin_org_names(user) -> list[str]:
     return sorted(admin_names | trusted_by_org | trusted_by_domain)
 
 
+ANALYTICS_ROLES = ("org_admin", "analyst")
+
+
+def get_analytics_org_ids(user) -> list[int]:
+    """
+    Return the ids of the orgs whose own aggregate results the user may view.
+
+    Only a direct, unexpired org_admin or analyst grant on an active org counts.
+    A group grant covers part of an org, and public or trusted visibility shares
+    patient data without making the user one of that org's own people.
+
+    Do not call for staff users — they see every org, and callers handle that
+    path before asking.
+    """
+    from .promop_models import PromopGroupAccess
+
+    user_id = getattr(user, "pk", None)
+    if not isinstance(user_id, int):
+        user_id = getattr(user, "id", None)
+    if not isinstance(user_id, int):
+        return []
+    if not _promop_access_tables_available():
+        return []
+
+    email = getattr(user, "email", "") or ""
+    access_identity_filter = Q(identity_id=user_id)
+    if email:
+        access_identity_filter |= Q(identity__email__iexact=email)
+
+    return sorted(set(
+        PromopGroupAccess.objects.filter(
+            access_identity_filter,
+            role__in=ANALYTICS_ROLES,
+            org__isnull=False,
+            org__is_active=True,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).values_list("org_id", flat=True)
+    ))
+
+
 def has_org_admin_access(user) -> bool:
     """Return True when the user may administer at least one org."""
     if not user or not getattr(user, "is_authenticated", False):

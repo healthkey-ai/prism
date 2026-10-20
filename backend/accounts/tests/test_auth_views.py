@@ -206,6 +206,20 @@ class TestMeView:
         assert resp.status_code == 200
         assert resp.data["is_org_admin"] is True
 
+    def test_can_view_surveys_flag(self, api_client, make_user, monkeypatch):
+        monkeypatch.setattr("accounts.permissions.get_analytics_org_ids", lambda user: [])
+        user = make_user(email="plain@example.com")
+        api_client.force_authenticate(user=user)
+        assert api_client.get(ME_URL).data["can_view_surveys"] is False
+
+        monkeypatch.setattr("accounts.permissions.get_analytics_org_ids", lambda user: [1])
+        assert api_client.get(ME_URL).data["can_view_surveys"] is True
+
+        staff = make_user(email="staff@example.com", is_staff=True)
+        api_client.force_authenticate(user=staff)
+        monkeypatch.setattr("accounts.permissions.get_analytics_org_ids", lambda user: [])
+        assert api_client.get(ME_URL).data["can_view_surveys"] is True
+
     def test_unauthenticated_returns_403(self, api_client):
         resp = api_client.get(ME_URL)
         assert resp.status_code == 403

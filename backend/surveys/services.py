@@ -55,8 +55,8 @@ def _is_numeric(question_type, key, text):
     )
 
 
-def survey_catalog():
-    surveys = Survey.objects.annotate(
+def survey_catalog(surveys):
+    surveys = surveys.annotate(
         completions=Count("versions__responses", filter=Q(versions__responses__status="submitted"))
     ).filter(completions__gt=0).order_by("title")
     return [{"id": str(s.pk), "title": s.title, "completions": s.completions} for s in surveys]
