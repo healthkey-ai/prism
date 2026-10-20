@@ -36,7 +36,7 @@ export default function App() {
 }
 
 function AuthenticatedApp({ auth }: { auth: AuthState }) {
-  const { filters, settings, metrics, loading, updateFilter, clearFilters, setFilters } = useAnalytics()
+  const { filters, settings, metrics, loading, error, updateFilter, clearFilters, setFilters } = useAnalytics()
   const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
   const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
   const [cohortDirty, setCohortDirty] = useState(false)
@@ -81,6 +81,13 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
     clearFilters()
   }
 
+  function handleDeleteCohort(cohortId: number) {
+    if (cohortId !== activeSavedCohortId) return
+    setActiveSavedCohortId(null)
+    setActiveCohortName(null)
+    setCohortDirty(false)
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <CohortPanel
@@ -90,11 +97,17 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
         onClear={handleClearFilters}
         cohortCount={metrics?.cohort.count ?? 0}
         onLoadCohort={handleLoadCohort}
+        onDeleteCohort={handleDeleteCohort}
         activeCohortName={activeCohortName}
         activeCohortId={activeSavedCohortId}
         cohortDirty={cohortDirty}
       />
       <main className="flex-1 overflow-y-auto">
+        {error && (
+          <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-700">
+            {error} Please refresh to try again.
+          </div>
+        )}
         <Dashboard
           metrics={metrics}
           loading={loading}

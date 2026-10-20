@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -47,7 +48,9 @@ class PatientInfo(models.Model):
     peripheral_neuropathy_grade = models.IntegerField(null=True)
 
     # cytogenetics / molecular
-    cytogenic_markers = models.TextField(null=True)
+    cytogenic_markers = models.TextField(
+        null=True, db_column=settings.CYTOGENETIC_MARKERS_DB_COLUMN
+    )
     genetic_mutations = models.JSONField(default=list)
     tp53_disruption = models.BooleanField(null=True)
     stem_cell_transplant_history = models.JSONField(null=True)

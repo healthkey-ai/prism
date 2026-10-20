@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   LineChart,
   Line,
@@ -12,6 +13,7 @@ import { mergeKMCurves } from '../../utils/kmChartUtils'
 
 interface Props {
   data: MetricsResponse['survival']
+  landmarkMonths?: number
 }
 
 const LINE_CONFIG = [
@@ -20,7 +22,11 @@ const LINE_CONFIG = [
   { key: 'efs', label: 'EFS', color: '#d97706' },
 ] as const
 
-export default function SurvivalCurves({ data }: Props) {
+export default function SurvivalCurves({ data, landmarkMonths }: Props) {
+  const chartData = useMemo(
+    () => data ? mergeKMCurves(LINE_CONFIG.map(({ key }) => ({ key, curve: data[key].curve }))) : [],
+    [data]
+  )
   if (!data) return null
 
   const hasAny = LINE_CONFIG.some(({ key }) => data[key].curve.length > 1)
@@ -32,10 +38,11 @@ export default function SurvivalCurves({ data }: Props) {
     )
   }
 
-  const chartData = mergeKMCurves(LINE_CONFIG.map(({ key }) => ({ key, curve: data[key].curve })))
-
   return (
     <div>
+      {data.os.n > 0 && data.os.events === 0 && (
+        <p className="text-xs text-gray-500 mb-3">No deaths were recorded during observed follow-up. Overall survival remains at 100%; the median is not reached.</p>
+      )}
       {/* Summary row */}
       <div className="flex flex-wrap gap-6 mb-4">
         {LINE_CONFIG.map(({ key, label, color }) => {
@@ -61,7 +68,7 @@ export default function SurvivalCurves({ data }: Props) {
           <XAxis
             dataKey="time"
             type="number"
-            label={{ value: 'Months from 1st-line start', position: 'insideBottom', offset: -12, fontSize: 11 }}
+            label={{ value: landmarkMonths == null ? 'Months from 1st-line start' : `Months after ${landmarkMonths}-month landmark`, position: 'insideBottom', offset: -12, fontSize: 11 }}
             tick={{ fontSize: 11 }}
             domain={[0, 'auto']}
           />
@@ -131,10 +138,14 @@ export default function SurvivalCurves({ data }: Props) {
       </ResponsiveContainer>
 
       <p className="text-xs text-gray-400 mt-2">
+        {landmarkMonths != null ? <>
+          Overall survival from the {landmarkMonths}-month landmark among patients observed alive beyond that point. Patients without a recorded death are censored at last known contact. Dashed line = 50% (median reference).
+        </> : <>
         <span className="font-medium text-blue-600">OS</span>: 1L start → death. &nbsp;
         <span className="font-medium text-teal-600">PFS</span>: 1L start → first progression (any line) or death. &nbsp;
         <span className="font-medium text-amber-600">EFS</span>: 1L start → treatment change, progression, or death. &nbsp;
         Patients without an event are censored at last known contact. Dashed line = 50% (median reference).
+        </>}
       </p>
     </div>
   )

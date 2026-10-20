@@ -8,7 +8,7 @@ import dj_database_url
 
 _db_url = os.environ.get("DATABASE_URL")
 if _db_url:
-    _is_remote = "localhost" not in _db_url and "127.0.0.1" not in _db_url
+    _is_remote = _db_url.startswith(("postgres://", "postgresql://")) and "localhost" not in _db_url and "127.0.0.1" not in _db_url
     DATABASES = {
         "default": dj_database_url.parse(
             _db_url,

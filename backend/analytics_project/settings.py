@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "patients",
     "cohorts",
     "metrics",
+    "surveys",
 ]
 
 MIDDLEWARE = [
@@ -62,6 +63,14 @@ DATABASES = {
         conn_health_checks=True,
     )
 }
+
+# PROMOP renamed this column in migration 0222. Environments migrate
+# independently, so retain the legacy default until their database is upgraded.
+CYTOGENETIC_MARKERS_DB_COLUMN = os.environ.get(
+    "CYTOGENETIC_MARKERS_DB_COLUMN", "cytogenic_markers"
+)
+if CYTOGENETIC_MARKERS_DB_COLUMN not in {"cytogenic_markers", "cytogenetic_markers"}:
+    raise ImproperlyConfigured("Invalid CYTOGENETIC_MARKERS_DB_COLUMN.")
 
 AUTH_USER_MODEL = "accounts.Identity"
 
@@ -112,6 +121,10 @@ if os.environ.get("MAILGUN_SENDER_DOMAIN"):
     ANYMAIL["MAILGUN_SENDER_DOMAIN"] = os.environ["MAILGUN_SENDER_DOMAIN"]
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@healthkey.ai")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://prism.healthkey.ai")
+
+# Self-service sign-up. Set SIGNUP_ENABLED=false on deployments where accounts
+# are created only by an operator.
+SIGNUP_ENABLED = os.environ.get("SIGNUP_ENABLED", "true").lower() in ("1", "true", "yes")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

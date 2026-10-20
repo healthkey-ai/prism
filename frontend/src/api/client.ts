@@ -1,5 +1,18 @@
 import axios from 'axios'
-import type { CohortFilters, FormSettings, MetricsResponse, SavedCohort } from '../types'
+import type { CohortFilters, FormSettings, MetricsResponse, SavedCohort, User } from '../types'
+
+export interface SurveySummary { id: string; title: string; completions: number }
+export interface SurveyQuestion { key: string; text: string; type: string }
+export interface SurveyCrosstab {
+  paired_completions: number
+  x_values: string[]
+  y_values: string[]
+  cells: { x: string; y: string; count: number }[]
+  numeric_summaries?: {
+    axis: 'x' | 'y'
+    groups: { label: string; n: number; mean: number; sd: number | null }[]
+  }[]
+}
 
 function getCsrfToken(): string {
   const match = document.cookie.match(/csrftoken=([^;]+)/)
@@ -59,6 +72,22 @@ export async function fetchMetrics(filters: CohortFilters): Promise<MetricsRespo
   return data
 }
 
+export async function fetchSurveys(): Promise<SurveySummary[]> {
+  const { data } = await api.get<SurveySummary[]>('/surveys/')
+  return data
+}
+
+export async function fetchSurveyQuestions(id: string): Promise<SurveyQuestion[]> {
+  const { data } = await api.get<SurveyQuestion[]>(`/surveys/${id}/questions/`)
+  return data
+}
+
+export async function fetchSurveyCrosstab(id: string, x: string, y: string): Promise<SurveyCrosstab> {
+  const params = new URLSearchParams({ x, y })
+  const { data } = await api.get<SurveyCrosstab>(`/surveys/${id}/crosstab/?${params}`)
+  return data
+}
+
 // Auth
 export async function fetchCurrentUser() {
   const { data } = await api.get('/auth/user/')
@@ -74,8 +103,18 @@ export async function logout() {
   await api.post('/auth/logout/')
 }
 
-export async function signup(email: string, password: string, name: string) {
-  const { data } = await api.post('/auth/signup/', { email, password, name })
+export type SignupResult =
+  | { created: true; user: User }
+  // An account already exists for the address; a setup link may have been emailed.
+  | { created: false; detail: string }
+
+export async function signup(email: string, password: string, name: string): Promise<SignupResult> {
+  const { status, data } = await api.post('/auth/signup/', { email, password, name })
+  return status === 201 ? { created: true, user: data } : { created: false, detail: data.detail }
+}
+
+export async function fetchAuthConfig(): Promise<{ signup_enabled: boolean }> {
+  const { data } = await api.get<{ signup_enabled: boolean }>('/auth/config/')
   return data
 }
 

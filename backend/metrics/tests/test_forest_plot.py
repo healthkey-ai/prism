@@ -116,6 +116,11 @@ def test_compute_too_few_patients_returns_empty():
     assert compute(qs) == []
 
 
+def test_compute_does_not_invent_hazard_ratios_without_deaths():
+    rows = [_make_os_row(0, last_days=200 + i * 10) for i in range(10)]
+    assert compute(_FakeQS(rows)) == []
+
+
 def test_compute_reports_mm_subgroups():
     """With enough patients and OS events, compute yields MM-relevant subgroup
     rows (cytogenetics / R-ISS stage / SCT / age / MRD), not breast-cancer ones.

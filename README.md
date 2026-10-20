@@ -138,6 +138,7 @@ gunicorn analytics_project.wsgi:application --bind 0.0.0.0:$PORT
 | `DEBUG` | `false` |
 | `SECRET_KEY` | *(generate a random secret)* |
 | `CORS_ALLOWED_ORIGINS` | `https://your-frontend.onrender.com` |
+| `CYTOGENETIC_MARKERS_DB_COLUMN` | `cytogenetic_markers` after PROMOP migration 0222; defaults to `cytogenic_markers` for older databases |
 
 ## Database
 

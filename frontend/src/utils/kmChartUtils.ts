@@ -4,7 +4,7 @@
  * Each input curve is identified by `key`. The output is an array of flat
  * objects `{ time, [key]: survival, [key]_lower, [key]_upper, ... }` covering
  * every distinct time point across all curves, with step-function forward-fill
- * for curves that have no event at a given time.
+ * for curves that have no event at a given time, up to their last observed point.
  *
  * CI keys (`${key}_lower` / `${key}_upper`) are emitted only when the source
  * curve points carry `ci_lower` / `ci_upper` fields.
@@ -18,10 +18,16 @@ export function mergeKMCurves(
   const allTimes = [
     ...new Set(curves.flatMap((c) => c.curve.map((p) => p.time))),
   ].sort((a, b) => a - b)
+  const observedCurves = curves.filter(c => c.curve.length > 0).map(c => ({
+    ...c, lastTime: Math.max(...c.curve.map(p => p.time)),
+  }))
 
   return allTimes.map((time) => {
     const point: Record<string, number> = { time }
-    curves.forEach(({ key, curve }) => {
+    observedCurves.forEach(({ key, curve, lastTime }) => {
+      // Do not invent survival for an empty group or extend a shorter group's
+      // curve beyond its observed follow-up on the shared time axis.
+      if (time > lastTime) return
       const last = [...curve].reverse().find((p) => p.time <= time)
       point[key] = last ? last.survival : 1.0
       if (last?.ci_lower != null) point[`${key}_lower`] = last.ci_lower

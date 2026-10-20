@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import type { ForestPlotRow } from '../../types'
+import type { ForestPlotRow, SurvivalLine } from '../../types'
 
 interface Props {
   data: ForestPlotRow[]
+  os?: SurvivalLine
 }
 
 const ROW_H    = 36
@@ -29,13 +30,16 @@ function pLabel(p: number): string {
   return p.toFixed(2)
 }
 
-export default function ForestPlot({ data }: Props) {
+export default function ForestPlot({ data, os }: Props) {
   const height = useMemo(
     () => PAD_TOP + data.length * ROW_H + PAD_BOT,
     [data.length]
   )
 
   if (data.length === 0) {
+    if (os && os.n > 0 && os.events === 0) {
+      return <p className="text-sm text-gray-500 text-center py-6">No recorded deaths among patients with evaluable overall survival. Hazard ratios cannot be estimated.</p>
+    }
     return <p className="text-sm text-gray-400 text-center py-6">Insufficient data for subgroup analysis</p>
   }
 

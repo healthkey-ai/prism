@@ -24,7 +24,29 @@ class _EmailAlreadyExists(Exception):
     """Raised when a local account with a usable password already exists for this email."""
 
 
-def _create_or_claim_signup_identity(email, password, name):
+class _ExistingAccountNeedsSetup(Exception):
+    """Raised when a local account exists for this email but has no password yet.
+
+    Sign-up never sets that account's password itself: nothing in the request
+    proves the caller owns the address, and the account may already carry
+    roles, group access or patient data. The owner finishes setting it
+    up through a single-use link sent to the address instead.
+    """
+
+    def __init__(self, identity):
+        super().__init__()
+        self.identity = identity
+
+
+# Same text whether or not a link was actually sent, so the response does not
+# reveal whether the account behind the address is active.
+_SETUP_LINK_SENT_DETAIL = (
+    "An account already exists for this email. If it can be set up here, "
+    "we have sent a link to that address to finish setting it up."
+)
+
+
+def _create_signup_identity(email, password, name):
     local_identities = list(
         Identity.objects.select_for_update()
         .filter(email__iexact=email, issuer="urn:local")
@@ -36,14 +58,28 @@ def _create_or_claim_signup_identity(email, password, name):
             raise _EmailAlreadyExists
 
     if local_identities:
-        identity = local_identities[0]
-        identity.email = Identity.objects.normalize_email(email)
-        identity.name = name
-        identity.set_password(password)
-        identity.save(update_fields=["email", "name", "password"])
-        return identity
+        raise _ExistingAccountNeedsSetup(local_identities[0])
 
     return Identity.objects.create_user(email=email, password=password, name=name)
+
+
+def _send_password_link(identity, subject, intro):
+    token_obj = PasswordResetToken.objects.create(identity=identity)
+    link = f"{settings.FRONTEND_URL}?token={token_obj.token}"
+    try:
+        send_mail(
+            subject=subject,
+            message=(
+                f"Hi {identity.name or identity.email},\n\n"
+                f"{intro} This link expires in 1 hour.\n\n"
+                f"{link}\n\n"
+                f"If you did not request this, you can ignore this email.\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[identity.email],
+        )
+    except Exception:
+        logger.exception("Failed to send password email to %s", identity.email[:3] + "***")
 
 
 @api_view(["POST"])
@@ -72,6 +108,12 @@ def logout_view(request):
 @permission_classes([AllowAny])
 @throttle_classes([AnonRateThrottle])
 def signup_view(request):
+    if not settings.SIGNUP_ENABLED:
+        return Response(
+            {"detail": "Sign-up is disabled. Ask an administrator for an account."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     email    = request.data.get("email", "").strip()
     password = request.data.get("password", "")
     name     = request.data.get("name", "").strip()
@@ -86,7 +128,18 @@ def signup_view(request):
 
     try:
         with transaction.atomic():
-            user = _create_or_claim_signup_identity(email, password, name)
+            user = _create_signup_identity(email, password, name)
+    except _ExistingAccountNeedsSetup as exc:
+        identity = exc.identity
+        if identity.is_active:
+            _send_password_link(
+                identity,
+                subject="Finish setting up your PRism account",
+                intro="Click the link below to choose a password for your account.",
+            )
+        else:
+            logger.warning("Sign-up for inactive account %s; no link sent", identity.uid)
+        return Response({"detail": _SETUP_LINK_SENT_DETAIL}, status=status.HTTP_202_ACCEPTED)
     except _EmailAlreadyExists:
         return Response({"detail": "An account with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
     except IntegrityError:
@@ -104,6 +157,13 @@ def signup_view(request):
 def me_view(request):
     get_token(request)
     return Response(_user_data(request.user))
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def auth_config_view(request):
+    """Public settings the login page needs before anyone is signed in."""
+    return Response({"signup_enabled": settings.SIGNUP_ENABLED})
 
 
 @api_view(["GET"])
@@ -154,22 +214,11 @@ def password_reset_request_view(request):
     except Identity.DoesNotExist:
         return Response({"detail": "If that email is registered you will receive a reset link shortly."})
 
-    token_obj = PasswordResetToken.objects.create(identity=identity)
-    reset_url = f"{settings.FRONTEND_URL}?token={token_obj.token}"
-    try:
-        send_mail(
-            subject="Reset your PRism password",
-            message=(
-                f"Hi {identity.name or identity.email},\n\n"
-                f"Click the link below to reset your password. This link expires in 1 hour.\n\n"
-                f"{reset_url}\n\n"
-                f"If you did not request a password reset, you can ignore this email.\n"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[identity.email],
-        )
-    except Exception:
-        logger.exception("Failed to send password reset email to %s", identity.email[:3] + "***")
+    _send_password_link(
+        identity,
+        subject="Reset your PRism password",
+        intro="Click the link below to reset your password.",
+    )
     return Response({"detail": "If that email is registered you will receive a reset link shortly."})
 
 
@@ -198,8 +247,10 @@ def password_reset_confirm_view(request):
 
     token_obj.identity.set_password(password)
     token_obj.identity.save(update_fields=["password"])
-    token_obj.used_at = timezone.now()
-    token_obj.save(update_fields=["used_at"])
+    # Every outstanding link for this account dies with the one that was used.
+    PasswordResetToken.objects.filter(
+        identity=token_obj.identity, used_at__isnull=True
+    ).update(used_at=timezone.now())
 
     request.session.cycle_key()
     login(request, token_obj.identity, backend="accounts.backends.EmailBackend")

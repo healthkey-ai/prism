@@ -88,10 +88,10 @@ describe('SaveCohortModal', () => {
       expect(screen.getByText('or save as new')).toBeInTheDocument()
     })
 
-    it('pre-fills the name input with the active cohort name', () => {
+    it('requires a new name instead of pre-filling the active cohort name', () => {
       render(<SaveCohortModal {...activeProps} />)
-      const input = screen.getByPlaceholderText(/e\.g\. High-risk MM/) as HTMLInputElement
-      expect(input.value).toBe('My Cohort')
+      const input = screen.getByPlaceholderText('Enter a new, unique name') as HTMLInputElement
+      expect(input.value).toBe('')
     })
 
     it('calls updateSavedCohort with current filters when Update is clicked', async () => {
@@ -107,8 +107,7 @@ describe('SaveCohortModal', () => {
     it('still allows saving as new when name is entered', async () => {
       vi.mocked(client.createSavedCohort).mockResolvedValue({ ...mockCohort, id: 2, name: 'Copy' })
       render(<SaveCohortModal {...activeProps} />)
-      const input = screen.getByPlaceholderText(/e\.g\. High-risk MM/)
-      await userEvent.clear(input)
+      const input = screen.getByPlaceholderText('Enter a new, unique name')
       await userEvent.type(input, 'Copy')
       await userEvent.click(screen.getByRole('button', { name: 'Save as new' }))
       await waitFor(() => {
@@ -116,6 +115,24 @@ describe('SaveCohortModal', () => {
           expect.objectContaining({ name: 'Copy' })
         )
       })
+    })
+
+    it('rejects the active cohort name when saving as new', async () => {
+      render(<SaveCohortModal {...activeProps} />)
+      await userEvent.type(screen.getByPlaceholderText('Enter a new, unique name'), ' my cohort ')
+      await userEvent.click(screen.getByRole('button', { name: 'Save as new' }))
+      expect(await screen.findByText('Choose a different name when saving as new.')).toBeInTheDocument()
+      expect(client.createSavedCohort).not.toHaveBeenCalled()
+    })
+
+    it('shows the API detail when another saved cohort has the name', async () => {
+      vi.mocked(client.createSavedCohort).mockRejectedValue({
+        response: { data: { detail: 'A saved cohort with this name already exists.' } },
+      })
+      render(<SaveCohortModal {...activeProps} />)
+      await userEvent.type(screen.getByPlaceholderText('Enter a new, unique name'), 'Another Cohort')
+      await userEvent.click(screen.getByRole('button', { name: 'Save as new' }))
+      expect(await screen.findByText('A saved cohort with this name already exists.')).toBeInTheDocument()
     })
   })
 })

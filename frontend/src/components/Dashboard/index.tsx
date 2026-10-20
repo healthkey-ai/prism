@@ -27,6 +27,7 @@ import PathwayOutcomes from '../charts/PathwayOutcomes'
 import Pod24 from '../charts/Pod24'
 import LandmarkResponse from '../charts/LandmarkResponse'
 import TransformationChart from '../charts/TransformationChart'
+import Surveys from '../Surveys'
 import api from '../../api/client'
 
 interface Props {
@@ -39,7 +40,7 @@ interface Props {
   filters: CohortFilters
 }
 
-type DashboardTab    = 'outcomes' | 'treatments' | 'profile'
+type DashboardTab    = 'outcomes' | 'treatments' | 'profile' | 'surveys'
 type ResponseLineTab = '1L' | '2L' | '3L+'
 type PatternLineTab  = '1L' | '2L' | '3L+' | 'overall'
 
@@ -106,6 +107,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
     { id: 'outcomes',   label: 'Outcomes' },
     { id: 'treatments', label: 'Treatments' },
     { id: 'profile',    label: 'Patient Profile' },
+    ...(user.is_staff ? [{ id: 'surveys' as const, label: 'Surveys' }] : []),
   ]
 
   function toFilterParams(): URLSearchParams {
@@ -165,15 +167,15 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
   return (
     <div className="relative min-h-screen bg-gray-50">
-      {loading && <Spinner />}
+      {loading && tab !== 'surveys' && <Spinner />}
 
       {/* Top bar */}
       <header className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
         {/* Title row */}
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-gray-900">{disease} Analytics</h1>
-            {metrics && (
+            <h1 className="text-lg font-bold text-gray-900">{tab === 'surveys' ? 'Survey Analytics' : `${disease} Analytics`}</h1>
+            {metrics && tab !== 'surveys' && (
               <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-0.5 text-sm font-semibold text-teal-700 border border-teal-200">
                 {cohortCount.toLocaleString()} patients
               </span>
@@ -214,7 +216,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           </div>
 
           {/* Export cohort button */}
-          {canExport ? (
+          {tab === 'surveys' ? null : canExport ? (
             <button
               onClick={handleExport}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
@@ -242,7 +244,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
       {/* Main content */}
       <main className="p-6 space-y-6 max-w-[1400px] mx-auto">
-        {isEmpty ? (
+        {tab === 'surveys' ? <Surveys /> : isEmpty ? (
           <>
             {metrics?.eligibility && metrics.eligibility.total > 0 && (
               <EligibilityCard data={metrics.eligibility} onExport={canExport ? chartExportHandler('eligibility') : undefined} />
@@ -284,7 +286,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 description="Overall survival measured from a fixed landmark time point, including only patients who were alive and event-free at that point. This method eliminates early-death bias and estimates survival conditional on reaching the landmark — a standard technique when comparing outcomes across different treatment eras."
               
               onExport={canExport ? chartExportHandler('landmark_survival') : undefined}>
-                <SurvivalCurves data={{
+                <SurvivalCurves landmarkMonths={metrics.landmark_survival.landmark_months} data={{
                   os:  metrics.landmark_survival,
                   pfs: { curve: [], n: 0, median: null },
                   efs: { curve: [], n: 0, median: null },
@@ -374,7 +376,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
                 description="Hazard ratios (HR) for overall survival across prespecified subgroups. Each row shows the HR and 95% confidence interval for a subgroup relative to its complement. An HR < 1 (left of center) indicates better survival in that subgroup. Wide confidence intervals reflect small sample sizes within the subgroup."
               
               onExport={canExport ? chartExportHandler('forest_plot') : undefined}>
-                <ForestPlot data={metrics?.forest_plot ?? []} />
+                <ForestPlot data={metrics?.forest_plot ?? []} os={metrics?.survival?.os} />
               </MetricCard>
             )}
           </>
@@ -541,10 +543,13 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
             <MetricCard
               title="Disease Staging & Characteristics"
-              description="Distribution of ISS/R-ISS staging, cytogenetic risk groups (high-risk vs. standard-risk), SCT eligibility and history, CRAB criteria, and other disease-defining characteristics at baseline. Higher proportions of ISS Stage III or high-risk cytogenetics indicate a more aggressive disease population."
+              description={isMultipleMyeloma
+                ? "Distribution of ISS/R-ISS staging, cytogenetic risk groups (high-risk vs. standard-risk), SCT eligibility and history, CRAB criteria, and other disease-defining characteristics at baseline. Higher proportions of ISS Stage III or high-risk cytogenetics indicate a more aggressive disease population."
+                : "Distribution of disease staging, cytogenetic risk groups, ECOG performance status, and other disease-defining characteristics at baseline."
+              }
             
               onExport={canExport ? chartExportHandler('staging') : undefined}>
-              {metrics?.staging ? <StagingPanel data={metrics.staging} /> : <NoDataPlaceholder />}
+              {metrics?.staging ? <StagingPanel data={metrics.staging} isMM={isMultipleMyeloma} /> : <NoDataPlaceholder />}
             </MetricCard>
 
             <MetricCard
