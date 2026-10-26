@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Serving under a path prefix.** `VITE_BASE_PATH` (for example `/analytics/`) at frontend build time moves the asset URLs and the API client's base URL under that prefix, so PRism can share a host with another app. `VITE_CSRF_COOKIE_NAME` names the CSRF cookie the frontend reads, to match a non-default backend `CSRF_COOKIE_NAME`. The CSRF lookup is now anchored, so one cookie name never matches the tail of another. The defaults (`/` and `csrftoken`) leave existing deployments unchanged.
 
+### Fixed
+- **First `migrate` on a database PRomop already owns** no longer fails with `InconsistentMigrationHistory` (#64). PRomop records `admin.0001_initial`, which in PRism depends on `accounts.0001`; `accounts` now overrides `migrate` to apply that idempotent migration first, only in exactly that state.
+
 ### Planned
 
 - **OHDSI Atlas cohort export** — export a saved PRism cohort as an Atlas-compatible Circe JSON definition via `GET /api/cohorts/saved/{id}/export/atlas/`. Enables cohorts defined in PRism's point-and-click UI to be executed in OHDSI tools (PatientLevelPrediction, CohortMethod). Requires a concept mapping layer from PROMOP field values to OMOP vocabulary concept IDs.
