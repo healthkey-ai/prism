@@ -102,9 +102,9 @@ export default function Surveys() {
     try {
       const exportData = await fetchSurveyResponsesExport(surveyId, includePartial)
       const { questions: qs, rows, truncated } = exportData
-      const header = qs.map(q => `"${csvCell(q.text)}"`).join(',')
+      const header = ['"Respondent ID"', '"Email"', ...qs.map(q => `"${csvCell(q.text)}"`)].join(',')
       const dataRows = rows.map(row =>
-        qs.map(q => `"${csvCell(row.answers[q.key] ?? '')}"`).join(',')
+        [`"${csvCell(row.respondent_id)}"`, `"${csvCell(row.email)}"`, ...qs.map(q => `"${csvCell(row.answers[q.key] ?? '')}"`)].join(',')
       )
       const csv = [header, ...dataRows].join('\n')
       if (truncated) setError('Export truncated at 10 000 rows. Contact support for a full extract.')
@@ -201,12 +201,13 @@ export default function Surveys() {
           {responses && responses.questions.length > 0 && (
             <button
               onClick={downloadResponsesCSV}
-              className="flex items-center gap-1 text-sm text-teal-700 hover:text-teal-900 underline underline-offset-2"
+              aria-label="Download survey responses CSV"
+              title="Download CSV"
+              className="text-teal-700 hover:text-teal-900"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Download CSV
             </button>
           )}
         </div>
@@ -246,12 +247,13 @@ export default function Surveys() {
               {!table.numeric_summaries?.length && table.x_values.length > 0 && (
                 <button
                   onClick={downloadCrosstabCSV}
-                  className="flex items-center gap-1 text-sm text-teal-700 hover:text-teal-900 underline underline-offset-2"
+                  aria-label="Download crosstab CSV"
+                  title="Download CSV"
+                  className="text-teal-700 hover:text-teal-900"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Download CSV
                 </button>
               )}
             </div>

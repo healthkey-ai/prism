@@ -157,8 +157,10 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
         const a = document.createElement('a')
         a.href = url
         a.download = `${chartKey}_export.csv`
+        document.body.appendChild(a)
         a.click()
-        URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
       } catch {
         alert('Export failed. Please try again.')
       }
