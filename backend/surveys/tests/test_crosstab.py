@@ -65,8 +65,8 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     partial_result = crosstab(survey, "treatments", "country", include_partial=True)
     assert partial_result["paired_completions"] == 2
     assert partial_result["cells"] == [
-        {"x": "BR", "y": "United Kingdom", "count": 2},
-        {"x": "R-CHOP", "y": "United Kingdom", "count": 1},
+        {"x": "BR", "y": "United Kingdom", "count": 2, "pct": 100.0},
+        {"x": "R-CHOP", "y": "United Kingdom", "count": 1, "pct": 50.0},
     ]
 
     client = APIClient()
