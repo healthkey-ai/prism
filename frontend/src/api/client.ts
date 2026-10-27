@@ -5,9 +5,11 @@ export interface SurveySummary { id: string; title: string; completions: number 
 export interface SurveyQuestion { key: string; text: string; type: string }
 export interface SurveyCrosstab {
   paired_completions: number
+  x_n: number
+  y_n: number
   x_values: string[]
   y_values: string[]
-  cells: { x: string; y: string; count: number }[]
+  cells: { x: string; y: string; count: number; pct: number }[]
   numeric_summaries?: {
     axis: 'x' | 'y'
     groups: { label: string; n: number; mean: number; sd: number | null }[]

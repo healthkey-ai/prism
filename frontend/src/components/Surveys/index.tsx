@@ -104,7 +104,10 @@ export default function Surveys() {
     {error && <p role="alert" className="mt-5 text-sm text-red-700">{error}</p>}
     {loading && <p className="mt-5 text-sm text-gray-500">Loading crosstabulation…</p>}
     {chosenSurvey && table && !loading && <div className="mt-6">
-      <p className="mb-3 text-sm text-gray-600">{table.paired_completions} of {chosenSurvey.completions} completions answered both questions{includePartial ? ', plus partial responders' : ''}.</p>
+      <p className="mb-3 text-sm text-gray-600">
+        {table.paired_completions} of {chosenSurvey.completions} completions answered both questions{includePartial ? ', plus partial responders' : ''}.
+        {table.x_n != null && !table.numeric_summaries?.length ? ` (X: n=${table.x_n}, Y: n=${table.y_n})` : ''}
+      </p>
       {table.paired_completions === 0 ? <p className="text-sm text-gray-500">No paired answers for these questions.</p> :
         table.numeric_summaries?.length ?
           <NumericSummaryPlot summaries={table.numeric_summaries} xQuestion={xQuestion} yQuestion={yQuestion} /> :

@@ -15,10 +15,10 @@ function cellColor(count: number, maximum: number): string {
 
 export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
   const maximum = Math.max(0, ...data.cells.map(cell => cell.count))
-  const counts = new Map<string, Map<string, number>>()
+  const cellMap = new Map<string, Map<string, { count: number; pct: number }>>()
   for (const cell of data.cells) {
-    if (!counts.has(cell.y)) counts.set(cell.y, new Map())
-    counts.get(cell.y)!.set(cell.x, cell.count)
+    if (!cellMap.has(cell.y)) cellMap.set(cell.y, new Map())
+    cellMap.get(cell.y)!.set(cell.x, { count: cell.count, pct: cell.pct })
   }
 
   return <figure aria-label="Crosstabulation heatmap" className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
@@ -34,16 +34,19 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
             {data.y_values.map(row => <div key={row} className="contents">
               <div className="flex items-center justify-end pr-3 text-right text-xs font-medium text-slate-700">{row}</div>
               {data.x_values.map(column => {
-                const count = counts.get(row)?.get(column) ?? 0
-                const color = cellColor(count, maximum)
+                const cell = cellMap.get(row)?.get(column) ?? { count: 0, pct: 0 }
+                const color = cellColor(cell.count, maximum)
                 return <div
                   key={`${row}:${column}`}
                   role="img"
-                  aria-label={`${row} with ${column}: ${count} completions`}
-                  title={`${row} × ${column}: ${count} completions`}
-                  className="flex h-16 items-center justify-center rounded-md text-base font-bold tabular-nums transition-transform hover:scale-[1.04]"
-                  style={{ backgroundColor: color, color: count / (maximum || 1) > 0.6 ? '#ffffff' : '#134e4a' }}
-                >{count}</div>
+                  aria-label={`${row} with ${column}: ${cell.count} respondents (${cell.pct}%)`}
+                  title={`${row} × ${column}: ${cell.count} respondents (${cell.pct}%)`}
+                  className="flex h-16 flex-col items-center justify-center rounded-md tabular-nums transition-transform hover:scale-[1.04]"
+                  style={{ backgroundColor: color, color: cell.count / (maximum || 1) > 0.6 ? '#ffffff' : '#134e4a' }}
+                >
+                  <span className="text-base font-bold leading-tight">{cell.count}</span>
+                  <span className="text-xs opacity-80">{cell.pct}%</span>
+                </div>
               })}
             </div>)}
             <div aria-hidden="true" />
@@ -54,7 +57,7 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
       </div>
     </div>
     <figcaption className="mt-5 flex flex-wrap items-center justify-end gap-2 text-xs text-slate-600">
-      <span>Completions per combination</span>
+      <span>n and % of paired respondents per combination</span>
       <span>0</span>
       {COLORS.map((color, index) => <span key={index} aria-hidden="true" className="h-3 w-6 rounded-sm" style={{ backgroundColor: color }} />)}
       <span>{maximum}</span>
