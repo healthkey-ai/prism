@@ -54,9 +54,11 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     # Default (include_partial=False): only submitted responses.
     result = crosstab(survey, "treatments", "country")
     assert result["paired_completions"] == 1
+    assert result["x_n"] == 1
+    assert result["y_n"] == 1
     assert result["cells"] == [
-        {"x": "BR", "y": "United Kingdom", "count": 1},
-        {"x": "R-CHOP", "y": "United Kingdom", "count": 1},
+        {"x": "BR", "y": "United Kingdom", "count": 1, "pct": 100.0},
+        {"x": "R-CHOP", "y": "United Kingdom", "count": 1, "pct": 100.0},
     ]
 
     # include_partial=True: in_progress responses also included when both questions answered.
@@ -134,6 +136,8 @@ def test_numeric_scale_summarizes_paired_submitted_answers(survey_tables):
     # Default: only submitted (in_progress with score=100 excluded).
     result = crosstab(survey, "group", "score")
     assert result["paired_completions"] == 4
+    assert result["x_n"] == 4
+    assert result["y_n"] == 4
     assert result["cells"] == []
     assert result["numeric_summaries"] == [{"axis": "y", "groups": [
         {"label": "A", "n": 3, "mean": 3, "sd": 2},
@@ -165,6 +169,8 @@ def test_two_numeric_questions_use_only_paired_answers(survey_tables):
             SurveyAnswer.objects.create(response=response, question_key="y", value={"value": y})
     result = crosstab(survey, "x", "y")
     assert result["paired_completions"] == 2
+    assert result["x_n"] == 3  # all three answered x; only 2 also answered y
+    assert result["y_n"] == 2
     assert result["numeric_summaries"] == [
         {"axis": "x", "groups": [{"label": "All paired responses", "n": 2,
                                    "mean": 3, "sd": pytest.approx(2 ** 0.5)}]},
@@ -209,9 +215,11 @@ def test_ecog_choice_scores_are_numeric_on_either_axis(survey_tables):
         {"axis": "x", "groups": expected}]
     categorical = crosstab(survey, "treatment", "other_score")
     assert "numeric_summaries" not in categorical
+    assert categorical["x_n"] == 4
+    assert categorical["y_n"] == 4
     assert categorical["cells"] == [
-        {"x": "BR", "y": "0", "count": 3},
-        {"x": "R-CHOP", "y": "0", "count": 1},
+        {"x": "BR", "y": "0", "count": 3, "pct": 75.0},
+        {"x": "R-CHOP", "y": "0", "count": 1, "pct": 25.0},
     ]
 
     client = APIClient()

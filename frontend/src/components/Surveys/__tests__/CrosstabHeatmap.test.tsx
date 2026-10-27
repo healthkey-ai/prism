@@ -7,21 +7,21 @@ it('renders both answer axes and encodes zero and higher counts with different c
     xQuestion="Last treatment"
     yQuestion="Outcome"
     data={{
-      paired_completions: 3,
+      paired_completions: 3, x_n: 3, y_n: 3,
       x_values: ['BR', 'R-CHOP'],
       y_values: ['Complete Response', 'Partial Response'],
       cells: [
-        { x: 'BR', y: 'Complete Response', count: 3 },
-        { x: 'R-CHOP', y: 'Complete Response', count: 0 },
-        { x: 'BR', y: 'Partial Response', count: 1 },
-        { x: 'R-CHOP', y: 'Partial Response', count: 0 },
+        { x: 'BR', y: 'Complete Response', count: 3, pct: 100 },
+        { x: 'R-CHOP', y: 'Complete Response', count: 0, pct: 0 },
+        { x: 'BR', y: 'Partial Response', count: 1, pct: 33.3 },
+        { x: 'R-CHOP', y: 'Partial Response', count: 0, pct: 0 },
       ],
     }}
   />)
   expect(screen.getByText('X: Last treatment')).toBeInTheDocument()
   expect(screen.getByText('Y: Outcome')).toBeInTheDocument()
-  const high = screen.getByRole('img', { name: 'Complete Response with BR: 3 completions' })
-  const zero = screen.getByRole('img', { name: 'Complete Response with R-CHOP: 0 completions' })
+  const high = screen.getByRole('img', { name: 'Complete Response with BR: 3 respondents (100%)' })
+  const zero = screen.getByRole('img', { name: 'Complete Response with R-CHOP: 0 respondents (0%)' })
   expect(high).toHaveTextContent('3')
   expect(high).toHaveStyle({ backgroundColor: '#115e59' })
   expect(zero).toHaveStyle({ backgroundColor: '#f1f5f9' })
