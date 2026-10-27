@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { SurveyCrosstab } from '../../api/client'
 
 interface Props {
@@ -14,12 +15,18 @@ function cellColor(count: number, maximum: number): string {
 }
 
 export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
-  const maximum = Math.max(0, ...data.cells.map(cell => cell.count))
-  const cellMap = new Map<string, Map<string, { count: number; pct: number }>>()
-  for (const cell of data.cells) {
-    if (!cellMap.has(cell.y)) cellMap.set(cell.y, new Map())
-    cellMap.get(cell.y)!.set(cell.x, { count: cell.count, pct: cell.pct })
-  }
+  const maximum = useMemo(
+    () => Math.max(0, ...data.cells.map(cell => cell.count)),
+    [data.cells]
+  )
+  const cellMap = useMemo(() => {
+    const m = new Map<string, Map<string, { count: number; pct: number }>>()
+    for (const cell of data.cells) {
+      if (!m.has(cell.y)) m.set(cell.y, new Map())
+      m.get(cell.y)!.set(cell.x, { count: cell.count, pct: cell.pct })
+    }
+    return m
+  }, [data.cells])
 
   return <figure aria-label="Crosstabulation heatmap" className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
     <div className="flex gap-3">
@@ -61,6 +68,7 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
       <span>0</span>
       {COLORS.map((color, index) => <span key={index} aria-hidden="true" className="h-3 w-6 rounded-sm" style={{ backgroundColor: color }} />)}
       <span>{maximum}</span>
+      <span className="w-full text-right text-slate-400">* % may exceed 100 for multi-select questions, where one respondent can appear in multiple cells.</span>
     </figcaption>
   </figure>
 }
