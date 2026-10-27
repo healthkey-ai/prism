@@ -140,7 +140,7 @@ def _summaries(samples):
     ]
 
 
-def crosstab(survey, x_key, y_key):
+def crosstab(survey, x_key, y_key, include_partial=False):
     catalog = {q["key"]: q for q in question_catalog(survey)}
     x_info = catalog.get(x_key, {})
     y_info = catalog.get(y_key, {})
@@ -154,8 +154,13 @@ def crosstab(survey, x_key, y_key):
     x_samples = {}
     y_samples = {}
     paired = 0
+    x_n = 0  # respondents who answered x regardless of y
+    y_n = 0  # respondents who answered y regardless of x
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
     responses = SurveyResponse.objects.filter(
-        survey_version__survey=survey, status="submitted"
+        **response_filter
     ).prefetch_related(Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=[x_key, y_key])))
     for response in responses.iterator(chunk_size=500):
         answers = {a.question_key: a.value for a in response.answers.all()}
@@ -171,6 +176,10 @@ def crosstab(survey, x_key, y_key):
         ys = ["All paired responses"] if y_numeric and y_number is not None else (
             _labels(yq, answers.get(y_key)) if not y_numeric else []
         )
+        if xs:
+            x_n += 1
+        if ys:
+            y_n += 1
         if xs and ys:
             paired += 1
             if x_numeric:
@@ -189,9 +198,15 @@ def crosstab(survey, x_key, y_key):
             numeric_summaries.append({"axis": "x", "groups": _summaries(x_samples)})
         if y_numeric:
             numeric_summaries.append({"axis": "y", "groups": _summaries(y_samples)})
-        return {"paired_completions": paired, "x_values": [], "y_values": [], "cells": [],
+        return {"paired_completions": paired, "x_n": x_n, "y_n": y_n,
+                "x_values": [], "y_values": [], "cells": [],
                 "numeric_summaries": numeric_summaries}
     x_values = sorted({x for x, _ in counts})
     y_values = sorted({y for _, y in counts})
-    return {"paired_completions": paired, "x_values": x_values, "y_values": y_values,
-            "cells": [{"x": x, "y": y, "count": counts[(x, y)]} for x in x_values for y in y_values]}
+    cells = [
+        {"x": x, "y": y, "count": counts[(x, y)],
+         "pct": round(counts[(x, y)] / paired * 100, 1) if paired else 0.0}
+        for x in x_values for y in y_values
+    ]
+    return {"paired_completions": paired, "x_n": x_n, "y_n": y_n,
+            "x_values": x_values, "y_values": y_values, "cells": cells}

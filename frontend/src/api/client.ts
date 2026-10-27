@@ -5,9 +5,11 @@ export interface SurveySummary { id: string; title: string; completions: number 
 export interface SurveyQuestion { key: string; text: string; type: string }
 export interface SurveyCrosstab {
   paired_completions: number
+  x_n?: number
+  y_n?: number
   x_values: string[]
   y_values: string[]
-  cells: { x: string; y: string; count: number }[]
+  cells: { x: string; y: string; count: number; pct: number }[]
   numeric_summaries?: {
     axis: 'x' | 'y'
     groups: { label: string; n: number; mean: number; sd: number | null }[]
@@ -82,8 +84,9 @@ export async function fetchSurveyQuestions(id: string): Promise<SurveyQuestion[]
   return data
 }
 
-export async function fetchSurveyCrosstab(id: string, x: string, y: string): Promise<SurveyCrosstab> {
+export async function fetchSurveyCrosstab(id: string, x: string, y: string, includePartial = false): Promise<SurveyCrosstab> {
   const params = new URLSearchParams({ x, y })
+  if (includePartial) params.set('include_partial', 'true')
   const { data } = await api.get<SurveyCrosstab>(`/surveys/${id}/crosstab/?${params}`)
   return data
 }
