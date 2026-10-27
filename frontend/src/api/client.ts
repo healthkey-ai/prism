@@ -10,6 +10,8 @@ export interface SurveyCrosstab {
   x_values: string[]
   y_values: string[]
   cells: { x: string; y: string; count: number; pct: number }[]
+  x_option_counts?: Record<string, number>
+  y_option_counts?: Record<string, number>
   numeric_summaries?: {
     axis: 'x' | 'y'
     groups: { label: string; n: number; mean: number; sd: number | null }[]

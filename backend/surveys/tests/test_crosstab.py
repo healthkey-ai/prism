@@ -60,6 +60,8 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
         {"x": "BR", "y": "United Kingdom", "count": 1, "pct": 100.0},
         {"x": "R-CHOP", "y": "United Kingdom", "count": 1, "pct": 100.0},
     ]
+    assert result["x_option_counts"] == {"BR": 1, "R-CHOP": 1}
+    assert result["y_option_counts"] == {"United Kingdom": 1}
 
     # include_partial=True: in_progress responses also included when both questions answered.
     partial_result = crosstab(survey, "treatments", "country", include_partial=True)
@@ -68,6 +70,8 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
         {"x": "BR", "y": "United Kingdom", "count": 2, "pct": 100.0},
         {"x": "R-CHOP", "y": "United Kingdom", "count": 1, "pct": 50.0},
     ]
+    assert partial_result["x_option_counts"] == {"BR": 2, "R-CHOP": 1}
+    assert partial_result["y_option_counts"] == {"United Kingdom": 2}
 
     client = APIClient()
     client.force_authenticate(user=SimpleNamespace(is_staff=False, is_authenticated=True))

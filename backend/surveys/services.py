@@ -151,6 +151,8 @@ def crosstab(survey, x_key, y_key, include_partial=False):
     ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
     by_version = {(q.survey_version_id, q.key): q for q in questions if eligible(q)}
     counts = Counter()
+    x_option_counts: Counter = Counter()
+    y_option_counts: Counter = Counter()
     x_samples = {}
     y_samples = {}
     paired = 0
@@ -178,8 +180,12 @@ def crosstab(survey, x_key, y_key, include_partial=False):
         )
         if xs:
             x_n += 1
+            for xl in xs:
+                x_option_counts[xl] += 1
         if ys:
             y_n += 1
+            for yl in ys:
+                y_option_counts[yl] += 1
         if xs and ys:
             paired += 1
             if x_numeric:
@@ -209,4 +215,6 @@ def crosstab(survey, x_key, y_key, include_partial=False):
         for x in x_values for y in y_values
     ]
     return {"paired_completions": paired, "x_n": x_n, "y_n": y_n,
-            "x_values": x_values, "y_values": y_values, "cells": cells}
+            "x_values": x_values, "y_values": y_values, "cells": cells,
+            "x_option_counts": dict(x_option_counts),
+            "y_option_counts": dict(y_option_counts)}
