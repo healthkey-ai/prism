@@ -28,12 +28,12 @@ it('loads selections and shows the paired count and crosstab', async () => {
   await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
   await user.selectOptions(await screen.findByLabelText('X question'), 'a')
   await user.selectOptions(screen.getByLabelText('Y question'), 'b')
-  expect(await screen.findByText('2 respondents answered both questions (survey has 3 full completions).')).toBeInTheDocument()
+  expect(await screen.findByText('2 of 3 completions answered both questions.')).toBeInTheDocument()
   expect(screen.getByRole('figure', { name: 'Crosstabulation heatmap' })).toBeInTheDocument()
   expect(screen.getByText('X: Treatment?')).toBeInTheDocument()
   expect(screen.getByText('Y: Country?')).toBeInTheDocument()
   expect(screen.getByRole('img', { name: 'UK with BR: 2 completions' })).toBeInTheDocument()
-  await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b'))
+  await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b', false))
 })
 
 it('uses a mean and SD chart when a selected answer is numeric', async () => {

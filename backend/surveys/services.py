@@ -140,7 +140,7 @@ def _summaries(samples):
     ]
 
 
-def crosstab(survey, x_key, y_key):
+def crosstab(survey, x_key, y_key, include_partial=False):
     catalog = {q["key"]: q for q in question_catalog(survey)}
     x_info = catalog.get(x_key, {})
     y_info = catalog.get(y_key, {})
@@ -154,8 +154,11 @@ def crosstab(survey, x_key, y_key):
     x_samples = {}
     y_samples = {}
     paired = 0
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
     responses = SurveyResponse.objects.filter(
-        survey_version__survey=survey,
+        **response_filter
     ).prefetch_related(Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=[x_key, y_key])))
     for response in responses.iterator(chunk_size=500):
         answers = {a.question_key: a.value for a in response.answers.all()}
