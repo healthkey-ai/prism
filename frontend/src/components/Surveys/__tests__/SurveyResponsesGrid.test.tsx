@@ -4,7 +4,8 @@ import SurveyResponsesGrid from '../SurveyResponsesGrid'
 import type { SurveyResponsesData } from '../../../api/client'
 
 const mockData: SurveyResponsesData = {
-  total_submitted: 10,
+  total_responses: 10,
+  include_partial: false,
   questions: [
     {
       key: 'treatments',
@@ -58,7 +59,7 @@ it('renders row totals with n and percentage', () => {
 })
 
 it('renders empty state message when no questions', () => {
-  render(<SurveyResponsesGrid data={{ total_submitted: 0, questions: [] }} />)
+  render(<SurveyResponsesGrid data={{ total_responses: 0, include_partial: false, questions: [] }} />)
   expect(screen.getByText(/No categorical questions with responses found/)).toBeInTheDocument()
 })
 

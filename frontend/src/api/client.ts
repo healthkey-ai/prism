@@ -95,7 +95,7 @@ export async function fetchSurveyCrosstab(id: string, x: string, y: string, incl
 
 export interface SurveyResponseOption { label: string; count: number; pct: number }
 export interface SurveyResponseQuestion { key: string; text: string; n: number; options: SurveyResponseOption[] }
-export interface SurveyResponsesData { total_submitted: number; questions: SurveyResponseQuestion[] }
+export interface SurveyResponsesData { total_responses: number; include_partial: boolean; questions: SurveyResponseQuestion[] }
 
 export async function fetchSurveyResponses(id: string, includePartial = false): Promise<SurveyResponsesData> {
   const params = new URLSearchParams()
@@ -108,6 +108,7 @@ export interface SurveyResponseExportRow { answers: Record<string, string> }
 export interface SurveyResponseExport {
   questions: { key: string; text: string }[]
   rows: SurveyResponseExportRow[]
+  truncated: boolean
 }
 
 export async function fetchSurveyResponsesExport(id: string, includePartial = false): Promise<SurveyResponseExport> {

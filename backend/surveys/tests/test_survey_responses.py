@@ -51,7 +51,8 @@ def test_question_responses_basic(survey_tables):
     SurveyAnswer.objects.create(response=submitted, question_key="score", value={"value": 5})
 
     result = question_responses(survey)
-    assert result["total_submitted"] == 1
+    assert result["total_responses"] == 1
+    assert result["include_partial"] is False
     # scale excluded → only treatments + country
     assert len(result["questions"]) == 2
     q = next(q for q in result["questions"] if q["key"] == "treatments")
@@ -76,12 +77,14 @@ def test_question_responses_include_partial(survey_tables):
 
     # Default (include_partial=False): only submitted
     result = question_responses(survey, include_partial=False)
-    assert result["total_submitted"] == 1
+    assert result["total_responses"] == 1
+    assert result["include_partial"] is False
     assert result["questions"][0]["n"] == 1
 
     # include_partial=True: both responses
     result_p = question_responses(survey, include_partial=True)
-    assert result_p["total_submitted"] == 2
+    assert result_p["total_responses"] == 2
+    assert result_p["include_partial"] is True
     assert result_p["questions"][0]["n"] == 2
     assert result_p["questions"][0]["options"][0] == {"label": "USA", "count": 2, "pct": 100.0}
 
@@ -95,7 +98,7 @@ def test_question_responses_empty_queryset(survey_tables):
     )
     # No responses at all
     result = question_responses(survey)
-    assert result["total_submitted"] == 0
+    assert result["total_responses"] == 0
     # question_catalog returns empty (no submitted responses) so questions list is empty
     assert result["questions"] == []
 
@@ -165,7 +168,7 @@ def test_survey_responses_api_view(survey_tables):
     resp = client.get(f"/api/surveys/{survey.pk}/responses/")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total_submitted"] == 1
+    assert data["total_responses"] == 1
     assert data["questions"][0]["key"] == "country"
 
     # Not found

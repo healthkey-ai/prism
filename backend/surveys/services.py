@@ -62,12 +62,14 @@ def survey_catalog():
     return [{"id": str(s.pk), "title": s.title, "completions": s.completions} for s in surveys]
 
 
-def question_catalog(survey):
+def question_catalog(survey, include_partial=False):
     # Prefer the most recent question wording; a response is still interpreted
     # using the question and options belonging to its own instrument version.
+    qs_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        qs_filter["survey_version__responses__status"] = "submitted"
     questions = SurveyQuestion.objects.filter(
-        survey_version__survey=survey,
-        survey_version__responses__status="submitted",
+        **qs_filter,
     ).select_related("survey_version").order_by("-survey_version__created_at", "order").distinct()
     seen = set()
     result = []
@@ -142,7 +144,7 @@ def _summaries(samples):
 
 def question_responses(survey, include_partial=False):
     """Per-question marginal option counts for all eligible categorical questions."""
-    catalog = question_catalog(survey)
+    catalog = question_catalog(survey, include_partial=include_partial)
     categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
     keys = [q["key"] for q in categorical]
 
@@ -150,7 +152,7 @@ def question_responses(survey, include_partial=False):
     if not include_partial:
         response_filter["status"] = "submitted"
 
-    total_submitted = SurveyResponse.objects.filter(**response_filter).count()
+    total_responses = SurveyResponse.objects.filter(**response_filter).count()
 
     questions_qs = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=keys
@@ -188,14 +190,19 @@ def question_responses(survey, include_partial=False):
         ]
         result_questions.append({"key": key, "text": q_info["text"], "n": n, "options": opts})
 
-    return {"total_submitted": total_submitted, "questions": result_questions}
+    return {
+        "total_responses": total_responses,
+        "include_partial": include_partial,
+        "questions": result_questions,
+    }
 
 
 def response_export(survey, include_partial=False):
     """Return de-identified per-response answer data for CSV export."""
-    catalog = question_catalog(survey)
+    catalog = question_catalog(survey, include_partial=include_partial)
     categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
     keys = [q["key"] for q in categorical]
+    catalog_by_key = {q["key"]: q for q in categorical}
 
     response_filter = {"survey_version__survey": survey}
     if not include_partial:
@@ -209,13 +216,18 @@ def response_export(survey, include_partial=False):
     responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
         Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
     )
+    MAX_EXPORT_ROWS = 10_000
     rows = []
+    truncated = False
     for response in responses.iterator(chunk_size=500):
+        if len(rows) >= MAX_EXPORT_ROWS:
+            truncated = True
+            break
         answers = {a.question_key: a.value for a in response.answers.all()}
         row = {}
         for key in keys:
             q = by_version.get((response.survey_version_id, key))
-            if not q:
+            if not q or q.type != catalog_by_key[key]["type"]:
                 continue
             labels = _labels(q, answers.get(key))
             row[key] = "; ".join(labels) if labels else ""
@@ -224,11 +236,12 @@ def response_export(survey, include_partial=False):
     return {
         "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],
         "rows": rows,
+        "truncated": truncated,
     }
 
 
 def crosstab(survey, x_key, y_key, include_partial=False):
-    catalog = {q["key"]: q for q in question_catalog(survey)}
+    catalog = {q["key"]: q for q in question_catalog(survey, include_partial=include_partial)}
     x_info = catalog.get(x_key, {})
     y_info = catalog.get(y_key, {})
     x_numeric = _is_numeric(x_info.get("type"), x_key, x_info.get("text", ""))

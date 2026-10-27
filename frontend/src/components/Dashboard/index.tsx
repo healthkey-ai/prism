@@ -128,9 +128,10 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
     if (tab !== 'surveys' && !visibleIds.includes(tab) && visibleIds.length > 0) {
       setTab(visibleIds[0])
     }
-  // TABS is derived from metrics, so this fires when metrics loads
+  // TABS is derived from metrics + loading; include both so the effect re-runs
+  // when loading completes and tabs become visible/hidden.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metrics])
+  }, [metrics, loading])
 
   function toFilterParams(): URLSearchParams {
     const p = new URLSearchParams()

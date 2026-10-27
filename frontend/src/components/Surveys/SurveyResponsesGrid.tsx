@@ -13,7 +13,7 @@ function cellColor(count: number, maximum: number): string {
 }
 
 export default function SurveyResponsesGrid({ data }: Props) {
-  const totalSubmitted = data.total_submitted
+  const totalSubmitted = data.total_responses
 
   const rows = useMemo(
     () =>
@@ -71,7 +71,7 @@ export default function SurveyResponsesGrid({ data }: Props) {
         })}
       </div>
       <figcaption className="mt-4 text-xs text-slate-500">
-        % per option = count / question respondents. Row total % = question respondents / total submitted.
+        % per option = count / question respondents. Row total % = question respondents / total {data.include_partial ? 'responses (including partial)' : 'submitted'}.
       </figcaption>
     </figure>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   fetchSurveys,
   fetchSurveyQuestions,
@@ -23,6 +23,16 @@ export default function Surveys() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const selectSurvey = useCallback((id: string) => {
+    setSurveyId(id)
+    setQuestions([])
+    setX('')
+    setY('')
+    setTable(null)
+    setResponses(null)
+    setError('')
+  }, [])
+
   useEffect(() => {
     let active = true
     fetchSurveys().then(data => {
@@ -36,8 +46,7 @@ export default function Surveys() {
     if (surveys.length === 1 && !surveyId) {
       selectSurvey(surveys[0].id)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [surveys])
+  }, [surveys, surveyId, selectSurvey])
 
   useEffect(() => {
     if (!surveyId) return
@@ -53,7 +62,7 @@ export default function Surveys() {
     let active = true
     fetchSurveyResponses(surveyId, includePartial)
       .then(d => { if (active) setResponses(d) })
-      .catch(() => {})
+      .catch(() => { if (active) setError('Could not load responses.') })
     return () => { active = false }
   }, [surveyId, includePartial])
 
@@ -66,16 +75,6 @@ export default function Surveys() {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [surveyId, x, y, includePartial])
-
-  function selectSurvey(id: string) {
-    setSurveyId(id)
-    setQuestions([])
-    setX('')
-    setY('')
-    setTable(null)
-    setResponses(null)
-    setError('')
-  }
 
   function selectX(key: string) {
     setX(key)
@@ -91,23 +90,33 @@ export default function Surveys() {
     setLoading(Boolean(key && x && key !== x))
   }
 
+  function csvCell(s: string): string {
+    // Strip newlines (multi-line CSV fields confuse line-by-line parsers),
+    // escape double-quotes, and prefix spreadsheet formula starters to prevent injection.
+    const clean = s.replace(/[\r\n]+/g, ' ').replace(/"/g, '""')
+    return /^[=+\-@]/.test(clean) ? `'${clean}` : clean
+  }
+
   async function downloadResponsesCSV() {
     if (!surveyId || !responses) return
     try {
       const exportData = await fetchSurveyResponsesExport(surveyId, includePartial)
-      const { questions: qs, rows } = exportData
-      const header = qs.map(q => `"${q.text.replace(/"/g, '""')}"`).join(',')
+      const { questions: qs, rows, truncated } = exportData
+      const header = qs.map(q => `"${csvCell(q.text)}"`).join(',')
       const dataRows = rows.map(row =>
-        qs.map(q => `"${(row.answers[q.key] ?? '').replace(/"/g, '""')}"`).join(',')
+        qs.map(q => `"${csvCell(row.answers[q.key] ?? '')}"`).join(',')
       )
       const csv = [header, ...dataRows].join('\n')
+      if (truncated) setError('Export truncated at 10 000 rows. Contact support for a full extract.')
       const blob = new Blob([csv], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = 'survey_responses.csv'
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
       setError('Could not download responses CSV.')
     }
@@ -117,20 +126,20 @@ export default function Surveys() {
     if (!table || !x || !y) return
     const xText = questions.find(q => q.key === x)?.text ?? x
     const yText = questions.find(q => q.key === y)?.text ?? y
-    const header = [`"${yText.replace(/"/g, '""')}"`, ...table.x_values.map(v => `"${v.replace(/"/g, '""')}"`)]
+    const header = [`"${csvCell(yText)}"`, ...table.x_values.map(v => `"${csvCell(v)}"`)]
     const cellMap = new Map<string, Map<string, number>>()
     for (const cell of table.cells) {
       if (!cellMap.has(cell.y)) cellMap.set(cell.y, new Map())
       cellMap.get(cell.y)!.set(cell.x, cell.count)
     }
     const dataRows = table.y_values.map(yVal => {
-      const row = [`"${yVal.replace(/"/g, '""')}"`]
+      const row = [`"${csvCell(yVal)}"`]
       for (const xVal of table.x_values) {
         row.push(String(cellMap.get(yVal)?.get(xVal) ?? 0))
       }
       return row
     })
-    const csv = [[`"X: ${xText.replace(/"/g, '""')}"`, '', `"Y: ${yText.replace(/"/g, '""')}"`].join(',')]
+    const csv = [[`"X: ${csvCell(xText)}"`, '', `"Y: ${csvCell(yText)}"`].join(',')]
     csv.push(header.join(','))
     for (const row of dataRows) csv.push(row.join(','))
     const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
@@ -138,8 +147,10 @@ export default function Surveys() {
     const a = document.createElement('a')
     a.href = url
     a.download = 'crosstab.csv'
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   const chosenSurvey = surveys.find(s => s.id === surveyId)

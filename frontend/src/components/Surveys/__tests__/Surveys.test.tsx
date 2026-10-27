@@ -17,7 +17,7 @@ beforeEach(() => {
     { id: 'survey-1', title: 'FL survey', completions: 3 },
     { id: 'survey-2', title: 'Another survey', completions: 1 },
   ])
-  vi.mocked(client.fetchSurveyResponses).mockResolvedValue({ total_submitted: 3, questions: [] })
+  vi.mocked(client.fetchSurveyResponses).mockResolvedValue({ total_responses: 3, include_partial: false, questions: [] })
   vi.mocked(client.fetchSurveyQuestions).mockResolvedValue([
     { key: 'a', text: 'Treatment?', type: 'multi' },
     { key: 'b', text: 'Country?', type: 'single' },
