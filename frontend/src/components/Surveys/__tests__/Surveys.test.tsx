@@ -33,7 +33,7 @@ it('loads selections and shows the paired count and crosstab', async () => {
   expect(screen.getByText('X: Treatment?')).toBeInTheDocument()
   expect(screen.getByText('Y: Country?')).toBeInTheDocument()
   expect(screen.getByRole('img', { name: 'UK with BR: 2 completions' })).toBeInTheDocument()
-  await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b'))
+  await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b', false))
 })
 
 it('uses a mean and SD chart when a selected answer is numeric', async () => {

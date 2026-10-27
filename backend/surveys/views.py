@@ -33,4 +33,5 @@ def survey_crosstab(request, survey_id):
     available = {q["key"] for q in question_catalog(survey)}
     if not x_key or not y_key or x_key == y_key or x_key not in available or y_key not in available:
         return Response({"detail": "Choose two different available questions."}, status=status.HTTP_400_BAD_REQUEST)
-    return Response(crosstab(survey, x_key, y_key))
+    include_partial = request.query_params.get("include_partial", "").lower() in ("1", "true")
+    return Response(crosstab(survey, x_key, y_key, include_partial=include_partial))

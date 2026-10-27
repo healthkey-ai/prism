@@ -1,3 +1,4 @@
+import statistics
 import uuid
 from types import SimpleNamespace
 
@@ -49,10 +50,20 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
 
     assert survey_catalog() == [{"id": str(survey.pk), "title": "FL survey", "completions": 1}]
     assert [q["key"] for q in question_catalog(survey)] == ["treatments", "country"]
+
+    # Default (include_partial=False): only submitted responses.
     result = crosstab(survey, "treatments", "country")
     assert result["paired_completions"] == 1
     assert result["cells"] == [
         {"x": "BR", "y": "United Kingdom", "count": 1},
+        {"x": "R-CHOP", "y": "United Kingdom", "count": 1},
+    ]
+
+    # include_partial=True: in_progress responses also included when both questions answered.
+    partial_result = crosstab(survey, "treatments", "country", include_partial=True)
+    assert partial_result["paired_completions"] == 2
+    assert partial_result["cells"] == [
+        {"x": "BR", "y": "United Kingdom", "count": 2},
         {"x": "R-CHOP", "y": "United Kingdom", "count": 1},
     ]
 
@@ -62,6 +73,9 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     client.force_authenticate(user=SimpleNamespace(is_staff=True, is_authenticated=True))
     assert client.get(f"/api/surveys/{survey.pk}/crosstab/?x=story&y=country").status_code == 400
     assert client.get(f"/api/surveys/{survey.pk}/crosstab/?x=treatments&y=country").json() == result
+    assert client.get(
+        f"/api/surveys/{survey.pk}/crosstab/?x=treatments&y=country&include_partial=true"
+    ).json() == partial_result
 
 
 @pytest.mark.parametrize("description, expected", [
@@ -117,6 +131,7 @@ def test_numeric_scale_summarizes_paired_submitted_answers(survey_tables):
         SurveyAnswer.objects.create(response=response, question_key="group", value={"option": label})
         SurveyAnswer.objects.create(response=response, question_key="score", value={"value": score})
 
+    # Default: only submitted (in_progress with score=100 excluded).
     result = crosstab(survey, "group", "score")
     assert result["paired_completions"] == 4
     assert result["cells"] == []
@@ -126,6 +141,15 @@ def test_numeric_scale_summarizes_paired_submitted_answers(survey_tables):
     ]}]
     inverted = crosstab(survey, "score", "group")
     assert inverted["numeric_summaries"] == [{"axis": "x", "groups": result["numeric_summaries"][0]["groups"]}]
+
+    # include_partial=True: in_progress response (a, 100) also counted.
+    partial = crosstab(survey, "group", "score", include_partial=True)
+    assert partial["paired_completions"] == 5
+    assert partial["numeric_summaries"] == [{"axis": "y", "groups": [
+        {"label": "A", "n": 4, "mean": pytest.approx(27.25),
+         "sd": pytest.approx(statistics.stdev([1.0, 3.0, 5.0, 100.0]))},
+        {"label": "B", "n": 1, "mean": 0, "sd": None},
+    ]}]
 
 
 @pytest.mark.django_db

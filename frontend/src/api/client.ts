@@ -82,8 +82,9 @@ export async function fetchSurveyQuestions(id: string): Promise<SurveyQuestion[]
   return data
 }
 
-export async function fetchSurveyCrosstab(id: string, x: string, y: string): Promise<SurveyCrosstab> {
+export async function fetchSurveyCrosstab(id: string, x: string, y: string, includePartial = false): Promise<SurveyCrosstab> {
   const params = new URLSearchParams({ x, y })
+  if (includePartial) params.set('include_partial', 'true')
   const { data } = await api.get<SurveyCrosstab>(`/surveys/${id}/crosstab/?${params}`)
   return data
 }
