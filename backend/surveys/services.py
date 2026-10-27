@@ -7,7 +7,7 @@ from collections import Counter
 from django.db.models import Count, Prefetch, Q
 
 from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
-from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse
+from .models import Survey, SurveyAnswer, SurveyLinkedContact, SurveyOption, SurveyQuestion, SurveyResponse
 
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
@@ -62,12 +62,14 @@ def survey_catalog():
     return [{"id": str(s.pk), "title": s.title, "completions": s.completions} for s in surveys]
 
 
-def question_catalog(survey):
+def question_catalog(survey, include_partial=False):
     # Prefer the most recent question wording; a response is still interpreted
     # using the question and options belonging to its own instrument version.
+    qs_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        qs_filter["survey_version__responses__status"] = "submitted"
     questions = SurveyQuestion.objects.filter(
-        survey_version__survey=survey,
-        survey_version__responses__status="submitted",
+        **qs_filter,
     ).select_related("survey_version").order_by("-survey_version__created_at", "order").distinct()
     seen = set()
     result = []
@@ -140,8 +142,124 @@ def _summaries(samples):
     ]
 
 
-def crosstab(survey, x_key, y_key):
-    catalog = {q["key"]: q for q in question_catalog(survey)}
+def question_responses(survey, include_partial=False):
+    """Per-question marginal option counts for all eligible categorical questions."""
+    catalog = question_catalog(survey, include_partial=include_partial)
+    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    keys = [q["key"] for q in categorical]
+
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
+
+    total_responses = SurveyResponse.objects.filter(**response_filter).count()
+
+    questions_qs = SurveyQuestion.objects.filter(
+        survey_version__survey=survey, key__in=keys
+    ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
+    by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+    catalog_by_key = {q["key"]: q for q in categorical}
+
+    option_counts = {key: Counter() for key in keys}
+    respondent_counts = {key: 0 for key in keys}
+
+    responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
+        Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
+    )
+    for response in responses.iterator(chunk_size=500):
+        answers = {a.question_key: a.value for a in response.answers.all()}
+        for key in keys:
+            q = by_version.get((response.survey_version_id, key))
+            if not q or q.type != catalog_by_key[key]["type"]:
+                continue
+            labels = _labels(q, answers.get(key))
+            if labels:
+                respondent_counts[key] += 1
+                for label in labels:
+                    option_counts[key][label] += 1
+
+    result_questions = []
+    for q_info in categorical:
+        key = q_info["key"]
+        n = respondent_counts[key]
+        if n == 0:
+            continue
+        opts = [
+            {"label": label, "count": count, "pct": round(count / n * 100, 1)}
+            for label, count in sorted(option_counts[key].items(), key=lambda x: -x[1])
+        ]
+        result_questions.append({"key": key, "text": q_info["text"], "n": n, "options": opts})
+
+    return {
+        "total_responses": total_responses,
+        "include_partial": include_partial,
+        "questions": result_questions,
+    }
+
+
+def response_export(survey, include_partial=False):
+    """Return de-identified per-response answer data for CSV export."""
+    catalog = question_catalog(survey, include_partial=include_partial)
+    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    keys = [q["key"] for q in categorical]
+    catalog_by_key = {q["key"]: q for q in categorical}
+
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
+
+    questions_qs = SurveyQuestion.objects.filter(
+        survey_version__survey=survey, key__in=keys
+    ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
+    by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+
+    responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
+        Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
+    )
+    MAX_EXPORT_ROWS = 10_000
+    collected = []
+    truncated = False
+    for response in responses.iterator(chunk_size=500):
+        if len(collected) >= MAX_EXPORT_ROWS:
+            truncated = True
+            break
+        answers = {a.question_key: a.value for a in response.answers.all()}
+        row = {}
+        for key in keys:
+            q = by_version.get((response.survey_version_id, key))
+            if not q or q.type != catalog_by_key[key]["type"]:
+                continue
+            labels = _labels(q, answers.get(key))
+            row[key] = "; ".join(labels) if labels else ""
+        collected.append({"id": response.id, "answers": row})
+
+    # Bulk-fetch emails for all collected responses in one query.
+    response_ids = [r["id"] for r in collected]
+    emails = {
+        str(lc["response_id"]): lc["email"]
+        for lc in SurveyLinkedContact.objects.filter(
+            response_id__in=response_ids
+        ).values("response_id", "email")
+    }
+
+    rows = [
+        {
+            "respondent_id": str(r["id"]),
+            "email": emails.get(str(r["id"]), ""),
+            "answers": r["answers"],
+        }
+        for r in collected
+    ]
+
+    return {
+        "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],
+        "rows": rows,
+        "truncated": truncated,
+    }
+
+
+def crosstab(survey, x_key, y_key, include_partial=False):
+    catalog = {q["key"]: q for q in question_catalog(survey, include_partial=include_partial)}
     x_info = catalog.get(x_key, {})
     y_info = catalog.get(y_key, {})
     x_numeric = _is_numeric(x_info.get("type"), x_key, x_info.get("text", ""))
@@ -151,11 +269,18 @@ def crosstab(survey, x_key, y_key):
     ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
     by_version = {(q.survey_version_id, q.key): q for q in questions if eligible(q)}
     counts = Counter()
+    x_option_counts: Counter = Counter()
+    y_option_counts: Counter = Counter()
     x_samples = {}
     y_samples = {}
     paired = 0
+    x_n = 0  # respondents who answered x regardless of y
+    y_n = 0  # respondents who answered y regardless of x
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
     responses = SurveyResponse.objects.filter(
-        survey_version__survey=survey, status="submitted"
+        **response_filter
     ).prefetch_related(Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=[x_key, y_key])))
     for response in responses.iterator(chunk_size=500):
         answers = {a.question_key: a.value for a in response.answers.all()}
@@ -171,6 +296,14 @@ def crosstab(survey, x_key, y_key):
         ys = ["All paired responses"] if y_numeric and y_number is not None else (
             _labels(yq, answers.get(y_key)) if not y_numeric else []
         )
+        if xs:
+            x_n += 1
+            for xl in xs:
+                x_option_counts[xl] += 1
+        if ys:
+            y_n += 1
+            for yl in ys:
+                y_option_counts[yl] += 1
         if xs and ys:
             paired += 1
             if x_numeric:
@@ -189,9 +322,17 @@ def crosstab(survey, x_key, y_key):
             numeric_summaries.append({"axis": "x", "groups": _summaries(x_samples)})
         if y_numeric:
             numeric_summaries.append({"axis": "y", "groups": _summaries(y_samples)})
-        return {"paired_completions": paired, "x_values": [], "y_values": [], "cells": [],
+        return {"paired_completions": paired, "x_n": x_n, "y_n": y_n,
+                "x_values": [], "y_values": [], "cells": [],
                 "numeric_summaries": numeric_summaries}
     x_values = sorted({x for x, _ in counts})
     y_values = sorted({y for _, y in counts})
-    return {"paired_completions": paired, "x_values": x_values, "y_values": y_values,
-            "cells": [{"x": x, "y": y, "count": counts[(x, y)]} for x in x_values for y in y_values]}
+    cells = [
+        {"x": x, "y": y, "count": counts[(x, y)],
+         "pct": round(counts[(x, y)] / paired * 100, 1) if paired else 0.0}
+        for x in x_values for y in y_values
+    ]
+    return {"paired_completions": paired, "x_n": x_n, "y_n": y_n,
+            "x_values": x_values, "y_values": y_values, "cells": cells,
+            "x_option_counts": dict(x_option_counts),
+            "y_option_counts": dict(y_option_counts)}

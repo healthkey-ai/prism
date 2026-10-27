@@ -8,17 +8,23 @@ vi.mock('../../../api/client', () => ({
   fetchSurveys: vi.fn(),
   fetchSurveyQuestions: vi.fn(),
   fetchSurveyCrosstab: vi.fn(),
+  fetchSurveyResponses: vi.fn(),
+  fetchSurveyResponsesExport: vi.fn(),
 }))
 
 beforeEach(() => {
-  vi.mocked(client.fetchSurveys).mockResolvedValue([{ id: 'survey-1', title: 'FL survey', completions: 3 }])
+  vi.mocked(client.fetchSurveys).mockResolvedValue([
+    { id: 'survey-1', title: 'FL survey', completions: 3 },
+    { id: 'survey-2', title: 'Another survey', completions: 1 },
+  ])
+  vi.mocked(client.fetchSurveyResponses).mockResolvedValue({ total_responses: 3, include_partial: false, questions: [] })
   vi.mocked(client.fetchSurveyQuestions).mockResolvedValue([
     { key: 'a', text: 'Treatment?', type: 'multi' },
     { key: 'b', text: 'Country?', type: 'single' },
   ])
   vi.mocked(client.fetchSurveyCrosstab).mockResolvedValue({
-    paired_completions: 2, x_values: ['BR'], y_values: ['UK'],
-    cells: [{ x: 'BR', y: 'UK', count: 2 }],
+    paired_completions: 2, x_n: 2, y_n: 2, x_values: ['BR'], y_values: ['UK'],
+    cells: [{ x: 'BR', y: 'UK', count: 2, pct: 100 }],
   })
 })
 
@@ -28,12 +34,12 @@ it('loads selections and shows the paired count and crosstab', async () => {
   await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
   await user.selectOptions(await screen.findByLabelText('X question'), 'a')
   await user.selectOptions(screen.getByLabelText('Y question'), 'b')
-  expect(await screen.findByText('2 of 3 completions answered both questions.')).toBeInTheDocument()
+  expect(await screen.findByText(/2 of 3 completions answered both questions/)).toBeInTheDocument()
   expect(screen.getByRole('figure', { name: 'Crosstabulation heatmap' })).toBeInTheDocument()
   expect(screen.getByText('X: Treatment?')).toBeInTheDocument()
   expect(screen.getByText('Y: Country?')).toBeInTheDocument()
-  expect(screen.getByRole('img', { name: 'UK with BR: 2 completions' })).toBeInTheDocument()
-  await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b'))
+  expect(screen.getByRole('img', { name: 'UK with BR: 2 respondents (100%)' })).toBeInTheDocument()
+  await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b', false))
 })
 
 it('uses a mean and SD chart when a selected answer is numeric', async () => {
@@ -42,7 +48,7 @@ it('uses a mean and SD chart when a selected answer is numeric', async () => {
     { key: 'b', text: 'Well-being score?', type: 'scale' },
   ])
   vi.mocked(client.fetchSurveyCrosstab).mockResolvedValue({
-    paired_completions: 2, x_values: [], y_values: [], cells: [],
+    paired_completions: 2, x_n: 2, y_n: 2, x_values: [], y_values: [], cells: [],
     numeric_summaries: [{ axis: 'y', groups: [{ label: 'BR', n: 2, mean: 3, sd: 1 }] }],
   })
   const user = userEvent.setup()
