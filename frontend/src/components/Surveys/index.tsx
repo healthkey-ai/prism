@@ -70,7 +70,7 @@ export default function Surveys() {
 
   return <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h2 className="text-xl font-semibold text-gray-900">Crosstabulation Analysis</h2>
-    <p className="mt-1 text-sm text-gray-600">Compare answers from submitted survey completions across all organisations. Cohort filters do not apply. Multi-select answers count in each selected category.</p>
+    <p className="mt-1 text-sm text-gray-600">Compare survey answers across all organisations, including respondents who answered both questions even if they did not complete the full survey. Cohort filters do not apply. Multi-select answers count in each selected category.</p>
     <div className="mt-6 grid gap-4 md:grid-cols-3">
       <label className="text-sm font-medium text-gray-700">Survey
         <select aria-label="Survey" className="mt-2 block w-full rounded-lg border border-gray-300 p-2" value={surveyId} onChange={e => selectSurvey(e.target.value)}>
@@ -94,7 +94,7 @@ export default function Surveys() {
     {error && <p role="alert" className="mt-5 text-sm text-red-700">{error}</p>}
     {loading && <p className="mt-5 text-sm text-gray-500">Loading crosstabulation…</p>}
     {chosenSurvey && table && !loading && <div className="mt-6">
-      <p className="mb-3 text-sm text-gray-600">{table.paired_completions} of {chosenSurvey.completions} completions answered both questions.</p>
+      <p className="mb-3 text-sm text-gray-600">{table.paired_completions} respondents answered both questions (survey has {chosenSurvey.completions} full completions).</p>
       {table.paired_completions === 0 ? <p className="text-sm text-gray-500">No paired answers for these questions.</p> :
         table.numeric_summaries?.length ?
           <NumericSummaryPlot summaries={table.numeric_summaries} xQuestion={xQuestion} yQuestion={yQuestion} /> :

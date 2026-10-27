@@ -155,7 +155,7 @@ def crosstab(survey, x_key, y_key):
     y_samples = {}
     paired = 0
     responses = SurveyResponse.objects.filter(
-        survey_version__survey=survey, status="submitted"
+        survey_version__survey=survey,
     ).prefetch_related(Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=[x_key, y_key])))
     for response in responses.iterator(chunk_size=500):
         answers = {a.question_key: a.value for a in response.answers.all()}

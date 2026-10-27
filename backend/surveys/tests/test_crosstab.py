@@ -1,3 +1,4 @@
+import statistics
 import uuid
 from types import SimpleNamespace
 
@@ -27,7 +28,8 @@ def survey_tables(django_db_setup, django_db_blocker):
 
 
 @pytest.mark.django_db
-def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
+def test_multiselect_crosstab_includes_partial_responders(survey_tables):
+    """Partial responders (in_progress) are included when they answered both crosstab questions."""
     survey = Survey.objects.create(id=uuid.uuid4(), slug="fl", title="FL survey")
     version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
     x = SurveyQuestion.objects.create(survey_version=version, key="treatments", type="multi", order=1,
@@ -43,16 +45,19 @@ def test_submitted_multiselect_crosstab_and_freeform_exclusion(survey_tables):
     SurveyAnswer.objects.create(response=submitted, question_key="treatments",
                                 value={"options": ["br", "other"], "other_text": "R-CHOP"})
     SurveyAnswer.objects.create(response=submitted, question_key="country", value={"option": "gb"})
+    # Partial responder: answered both crosstab questions but did not fully submit.
     draft = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="in_progress")
     SurveyAnswer.objects.create(response=draft, question_key="treatments", value={"options": ["br"]})
     SurveyAnswer.objects.create(response=draft, question_key="country", value={"option": "gb"})
 
+    # survey_catalog still counts only submitted completions.
     assert survey_catalog() == [{"id": str(survey.pk), "title": "FL survey", "completions": 1}]
     assert [q["key"] for q in question_catalog(survey)] == ["treatments", "country"]
     result = crosstab(survey, "treatments", "country")
-    assert result["paired_completions"] == 1
+    # Both the submitted and the partial (in_progress) response answered treatments + country.
+    assert result["paired_completions"] == 2
     assert result["cells"] == [
-        {"x": "BR", "y": "United Kingdom", "count": 1},
+        {"x": "BR", "y": "United Kingdom", "count": 2},
         {"x": "R-CHOP", "y": "United Kingdom", "count": 1},
     ]
 
@@ -100,7 +105,8 @@ def test_structured_values_remain_eligible(type_, value):
 
 
 @pytest.mark.django_db
-def test_numeric_scale_summarizes_paired_submitted_answers(survey_tables):
+def test_numeric_scale_includes_partial_responders(survey_tables):
+    """Partial responders are included in numeric summaries when they answered both questions."""
     survey = Survey.objects.create(id=uuid.uuid4(), slug="scale-demo", title="Scale demo")
     version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
     category = SurveyQuestion.objects.create(survey_version=version, key="group", type="single",
@@ -118,10 +124,12 @@ def test_numeric_scale_summarizes_paired_submitted_answers(survey_tables):
         SurveyAnswer.objects.create(response=response, question_key="score", value={"value": score})
 
     result = crosstab(survey, "group", "score")
-    assert result["paired_completions"] == 4
+    # in_progress response also answered both questions, so all 5 are paired.
+    assert result["paired_completions"] == 5
     assert result["cells"] == []
     assert result["numeric_summaries"] == [{"axis": "y", "groups": [
-        {"label": "A", "n": 3, "mean": 3, "sd": 2},
+        {"label": "A", "n": 4, "mean": pytest.approx(27.25),
+         "sd": pytest.approx(statistics.stdev([1.0, 3.0, 5.0, 100.0]))},
         {"label": "B", "n": 1, "mean": 0, "sd": None},
     ]}]
     inverted = crosstab(survey, "score", "group")
