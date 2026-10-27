@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { CohortFilters, MetricsResponse, User } from '../../types'
 import MetricCard from '../ui/MetricCard'
 import ResponseRates from '../charts/ResponseRates'
@@ -103,12 +103,34 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
     : patternTab === '3L+' ? metrics?.treatment_patterns?.later_line ?? []
     : metrics?.treatment_patterns?.overall ?? []
 
+  const outcomesHasContent = !metrics || loading ||
+    (metrics.survival?.os?.n ?? 0) > 0 ||
+    (metrics.response_rates?.first_line?.length ?? 0) > 0 ||
+    !!metrics.dor
+
+  const treatmentsHasContent = !metrics || loading ||
+    (metrics.treatment_patterns?.first_line?.length ?? 0) > 0 ||
+    !!metrics.ttnt || !!metrics.switching || !!metrics.time_to_treatment
+
+  const profileHasContent = !metrics || loading ||
+    !!metrics.demographics || !!metrics.staging || !!metrics.labs ||
+    !!metrics.disease_state || !!metrics.cohort_characterization
+
   const TABS: { id: DashboardTab; label: string }[] = [
-    { id: 'outcomes',   label: 'Outcomes' },
-    { id: 'treatments', label: 'Treatments' },
-    { id: 'profile',    label: 'Patient Profile' },
+    ...(outcomesHasContent ? [{ id: 'outcomes' as const, label: 'Outcomes' }] : []),
+    ...(treatmentsHasContent ? [{ id: 'treatments' as const, label: 'Treatments' }] : []),
+    ...(profileHasContent ? [{ id: 'profile' as const, label: 'Patient Profile' }] : []),
     ...(user.is_staff ? [{ id: 'surveys' as const, label: 'Surveys' }] : []),
   ]
+
+  useEffect(() => {
+    const visibleIds = TABS.map(t => t.id)
+    if (tab !== 'surveys' && !visibleIds.includes(tab) && visibleIds.length > 0) {
+      setTab(visibleIds[0])
+    }
+  // TABS is derived from metrics, so this fires when metrics loads
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metrics])
 
   function toFilterParams(): URLSearchParams {
     const p = new URLSearchParams()
@@ -246,7 +268,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
       <main className="p-6 space-y-6 max-w-[1400px] mx-auto">
         {tab === 'surveys' ? <Surveys /> : isEmpty ? (
           <>
-            {metrics?.eligibility && metrics.eligibility.total > 0 && (
+            {!isFollicularLymphoma && metrics?.eligibility && metrics.eligibility.total > 0 && (
               <EligibilityCard data={metrics.eligibility} onExport={canExport ? chartExportHandler('eligibility') : undefined} />
             )}
             <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
@@ -509,7 +531,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
               </MetricCard>
             )}
 
-            {metrics?.eligibility && metrics.eligibility.total > 0 && (
+            {!isFollicularLymphoma && metrics?.eligibility && metrics.eligibility.total > 0 && (
               <EligibilityCard data={metrics.eligibility} onExport={canExport ? chartExportHandler('eligibility') : undefined} />
             )}
 

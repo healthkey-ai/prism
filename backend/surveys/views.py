@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
 from .models import Survey
-from .services import crosstab, question_catalog, survey_catalog
+from .services import crosstab, question_catalog, question_responses, response_export, survey_catalog
 
 
 @api_view(["GET"])
@@ -20,6 +20,26 @@ def questions(request, survey_id):
     if survey is None:
         return Response({"detail": "Survey not found."}, status=status.HTTP_404_NOT_FOUND)
     return Response(question_catalog(survey))
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def survey_responses(request, survey_id):
+    survey = Survey.objects.filter(pk=survey_id).first()
+    if survey is None:
+        return Response({"detail": "Survey not found."}, status=status.HTTP_404_NOT_FOUND)
+    include_partial = request.query_params.get("include_partial", "").lower() in ("1", "true")
+    return Response(question_responses(survey, include_partial=include_partial))
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def survey_responses_export(request, survey_id):
+    survey = Survey.objects.filter(pk=survey_id).first()
+    if survey is None:
+        return Response({"detail": "Survey not found."}, status=status.HTTP_404_NOT_FOUND)
+    include_partial = request.query_params.get("include_partial", "").lower() in ("1", "true")
+    return Response(response_export(survey, include_partial=include_partial))
 
 
 @api_view(["GET"])

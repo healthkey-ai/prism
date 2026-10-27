@@ -8,10 +8,16 @@ vi.mock('../../../api/client', () => ({
   fetchSurveys: vi.fn(),
   fetchSurveyQuestions: vi.fn(),
   fetchSurveyCrosstab: vi.fn(),
+  fetchSurveyResponses: vi.fn(),
+  fetchSurveyResponsesExport: vi.fn(),
 }))
 
 beforeEach(() => {
-  vi.mocked(client.fetchSurveys).mockResolvedValue([{ id: 'survey-1', title: 'FL survey', completions: 3 }])
+  vi.mocked(client.fetchSurveys).mockResolvedValue([
+    { id: 'survey-1', title: 'FL survey', completions: 3 },
+    { id: 'survey-2', title: 'Another survey', completions: 1 },
+  ])
+  vi.mocked(client.fetchSurveyResponses).mockResolvedValue({ total_submitted: 3, questions: [] })
   vi.mocked(client.fetchSurveyQuestions).mockResolvedValue([
     { key: 'a', text: 'Treatment?', type: 'multi' },
     { key: 'b', text: 'Country?', type: 'single' },

@@ -93,6 +93,30 @@ export async function fetchSurveyCrosstab(id: string, x: string, y: string, incl
   return data
 }
 
+export interface SurveyResponseOption { label: string; count: number; pct: number }
+export interface SurveyResponseQuestion { key: string; text: string; n: number; options: SurveyResponseOption[] }
+export interface SurveyResponsesData { total_submitted: number; questions: SurveyResponseQuestion[] }
+
+export async function fetchSurveyResponses(id: string, includePartial = false): Promise<SurveyResponsesData> {
+  const params = new URLSearchParams()
+  if (includePartial) params.set('include_partial', 'true')
+  const { data } = await api.get<SurveyResponsesData>(`/surveys/${id}/responses/?${params}`)
+  return data
+}
+
+export interface SurveyResponseExportRow { answers: Record<string, string> }
+export interface SurveyResponseExport {
+  questions: { key: string; text: string }[]
+  rows: SurveyResponseExportRow[]
+}
+
+export async function fetchSurveyResponsesExport(id: string, includePartial = false): Promise<SurveyResponseExport> {
+  const params = new URLSearchParams()
+  if (includePartial) params.set('include_partial', 'true')
+  const { data } = await api.get<SurveyResponseExport>(`/surveys/${id}/responses/export/?${params}`)
+  return data
+}
+
 // Auth
 export async function fetchCurrentUser() {
   const { data } = await api.get('/auth/user/')

@@ -140,6 +140,93 @@ def _summaries(samples):
     ]
 
 
+def question_responses(survey, include_partial=False):
+    """Per-question marginal option counts for all eligible categorical questions."""
+    catalog = question_catalog(survey)
+    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    keys = [q["key"] for q in categorical]
+
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
+
+    total_submitted = SurveyResponse.objects.filter(**response_filter).count()
+
+    questions_qs = SurveyQuestion.objects.filter(
+        survey_version__survey=survey, key__in=keys
+    ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
+    by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+    catalog_by_key = {q["key"]: q for q in categorical}
+
+    option_counts = {key: Counter() for key in keys}
+    respondent_counts = {key: 0 for key in keys}
+
+    responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
+        Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
+    )
+    for response in responses.iterator(chunk_size=500):
+        answers = {a.question_key: a.value for a in response.answers.all()}
+        for key in keys:
+            q = by_version.get((response.survey_version_id, key))
+            if not q or q.type != catalog_by_key[key]["type"]:
+                continue
+            labels = _labels(q, answers.get(key))
+            if labels:
+                respondent_counts[key] += 1
+                for label in labels:
+                    option_counts[key][label] += 1
+
+    result_questions = []
+    for q_info in categorical:
+        key = q_info["key"]
+        n = respondent_counts[key]
+        if n == 0:
+            continue
+        opts = [
+            {"label": label, "count": count, "pct": round(count / n * 100, 1)}
+            for label, count in sorted(option_counts[key].items(), key=lambda x: -x[1])
+        ]
+        result_questions.append({"key": key, "text": q_info["text"], "n": n, "options": opts})
+
+    return {"total_submitted": total_submitted, "questions": result_questions}
+
+
+def response_export(survey, include_partial=False):
+    """Return de-identified per-response answer data for CSV export."""
+    catalog = question_catalog(survey)
+    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    keys = [q["key"] for q in categorical]
+
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
+
+    questions_qs = SurveyQuestion.objects.filter(
+        survey_version__survey=survey, key__in=keys
+    ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
+    by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+
+    responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
+        Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
+    )
+    rows = []
+    for response in responses.iterator(chunk_size=500):
+        answers = {a.question_key: a.value for a in response.answers.all()}
+        row = {}
+        for key in keys:
+            q = by_version.get((response.survey_version_id, key))
+            if not q:
+                continue
+            labels = _labels(q, answers.get(key))
+            row[key] = "; ".join(labels) if labels else ""
+        rows.append({"answers": row})
+
+    return {
+        "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],
+        "rows": rows,
+    }
+
+
 def crosstab(survey, x_key, y_key, include_partial=False):
     catalog = {q["key"]: q for q in question_catalog(survey)}
     x_info = catalog.get(x_key, {})
