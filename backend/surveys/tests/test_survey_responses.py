@@ -6,13 +6,13 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from types import SimpleNamespace
 
-from surveys.models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse, SurveyVersion
+from surveys.models import Survey, SurveyAnswer, SurveyLinkedContact, SurveyOption, SurveyQuestion, SurveyResponse, SurveyVersion
 from surveys.services import question_responses, response_export
 
 
 @pytest.fixture(scope="module")
 def survey_tables(django_db_setup, django_db_blocker):
-    models = [Survey, SurveyVersion, SurveyQuestion, SurveyOption, SurveyResponse, SurveyAnswer]
+    models = [Survey, SurveyVersion, SurveyQuestion, SurveyOption, SurveyResponse, SurveyAnswer, SurveyLinkedContact]
     with django_db_blocker.unblock():
         with connection.schema_editor() as editor:
             for model in models:
@@ -140,13 +140,26 @@ def test_response_export_structure(survey_tables):
     )
     SurveyOption.objects.create(question=q, key="br", order=0, label="BR", free_text=False)
 
-    r = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
-    SurveyAnswer.objects.create(response=r, question_key="treatment", value={"option": "br"})
+    r1 = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+    SurveyAnswer.objects.create(response=r1, question_key="treatment", value={"option": "br"})
+    r2 = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+    SurveyAnswer.objects.create(response=r2, question_key="treatment", value={"option": "br"})
+    # Attach an email contact only to r2
+    SurveyLinkedContact.objects.create(response=r2, email="user@example.com")
 
     result = response_export(survey)
     assert result["questions"] == [{"key": "treatment", "text": "Treatment"}]
-    assert len(result["rows"]) == 1
-    assert result["rows"][0]["answers"]["treatment"] == "BR"
+    assert len(result["rows"]) == 2
+    # Both rows have respondent_id populated
+    ids = {row["respondent_id"] for row in result["rows"]}
+    assert str(r1.id) in ids
+    assert str(r2.id) in ids
+    # r1 has no email; r2 has one
+    row1 = next(row for row in result["rows"] if row["respondent_id"] == str(r1.id))
+    row2 = next(row for row in result["rows"] if row["respondent_id"] == str(r2.id))
+    assert row1["email"] == ""
+    assert row2["email"] == "user@example.com"
+    assert row1["answers"]["treatment"] == "BR"
 
 
 @pytest.mark.django_db

@@ -64,3 +64,16 @@ class SurveyAnswer(models.Model):
     class Meta:
         managed = False
         db_table = "prolog_surveys_surveyanswer"
+
+
+class SurveyLinkedContact(models.Model):
+    """Optional email contact a respondent provided when submitting their survey."""
+    response = models.OneToOneField(
+        SurveyResponse, on_delete=models.DO_NOTHING, related_name="linked_contact",
+        db_column="response_id",
+    )
+    email = models.CharField(max_length=254)
+
+    class Meta:
+        managed = False
+        db_table = "prolog_surveys_surveylinkedcontact"

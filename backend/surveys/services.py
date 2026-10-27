@@ -7,7 +7,7 @@ from collections import Counter
 from django.db.models import Count, Prefetch, Q
 
 from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
-from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse
+from .models import Survey, SurveyAnswer, SurveyLinkedContact, SurveyOption, SurveyQuestion, SurveyResponse
 
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
@@ -217,10 +217,10 @@ def response_export(survey, include_partial=False):
         Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
     )
     MAX_EXPORT_ROWS = 10_000
-    rows = []
+    collected = []
     truncated = False
     for response in responses.iterator(chunk_size=500):
-        if len(rows) >= MAX_EXPORT_ROWS:
+        if len(collected) >= MAX_EXPORT_ROWS:
             truncated = True
             break
         answers = {a.question_key: a.value for a in response.answers.all()}
@@ -231,7 +231,25 @@ def response_export(survey, include_partial=False):
                 continue
             labels = _labels(q, answers.get(key))
             row[key] = "; ".join(labels) if labels else ""
-        rows.append({"answers": row})
+        collected.append({"id": response.id, "answers": row})
+
+    # Bulk-fetch emails for all collected responses in one query.
+    response_ids = [r["id"] for r in collected]
+    emails = {
+        str(lc["response_id"]): lc["email"]
+        for lc in SurveyLinkedContact.objects.filter(
+            response_id__in=response_ids
+        ).values("response_id", "email")
+    }
+
+    rows = [
+        {
+            "respondent_id": str(r["id"]),
+            "email": emails.get(str(r["id"]), ""),
+            "answers": r["answers"],
+        }
+        for r in collected
+    ]
 
     return {
         "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],

@@ -104,7 +104,7 @@ export async function fetchSurveyResponses(id: string, includePartial = false): 
   return data
 }
 
-export interface SurveyResponseExportRow { answers: Record<string, string> }
+export interface SurveyResponseExportRow { respondent_id: string; email: string; answers: Record<string, string> }
 export interface SurveyResponseExport {
   questions: { key: string; text: string }[]
   rows: SurveyResponseExportRow[]
