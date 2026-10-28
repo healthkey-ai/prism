@@ -265,7 +265,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
 
       {/* Main content */}
       <main className="p-6 space-y-6 max-w-[1400px] mx-auto">
-        {tab === 'surveys' ? <Surveys /> : isEmpty ? (
+        {tab === 'surveys' ? <Surveys filters={filters} /> : isEmpty ? (
           <>
             {!isFollicularLymphoma && metrics?.eligibility && metrics.eligibility.total > 0 && (
               <EligibilityCard data={metrics.eligibility} onExport={canExport ? chartExportHandler('eligibility') : undefined} />

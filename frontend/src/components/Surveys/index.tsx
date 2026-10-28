@@ -5,13 +5,17 @@ import {
   fetchSurveyCrosstab,
   fetchSurveyResponses,
   fetchSurveyResponsesExport,
+  toParams,
 } from '../../api/client'
 import type { SurveySummary, SurveyQuestion, SurveyCrosstab, SurveyResponsesData } from '../../api/client'
+import type { CohortFilters } from '../../types'
 import CrosstabHeatmap from './CrosstabHeatmap'
 import NumericSummaryPlot from './NumericSummaryPlot'
 import SurveyResponsesGrid from './SurveyResponsesGrid'
 
-export default function Surveys() {
+interface Props { filters?: CohortFilters }
+
+export default function Surveys({ filters }: Props) {
   const [surveys, setSurveys] = useState<SurveySummary[]>([])
   const [surveyId, setSurveyId] = useState('')
   const [questions, setQuestions] = useState<SurveyQuestion[]>([])
@@ -60,21 +64,21 @@ export default function Surveys() {
   useEffect(() => {
     if (!surveyId) return
     let active = true
-    fetchSurveyResponses(surveyId, includePartial)
+    fetchSurveyResponses(surveyId, includePartial, filters)
       .then(d => { if (active) setResponses(d) })
       .catch(() => { if (active) setError('Could not load responses.') })
     return () => { active = false }
-  }, [surveyId, includePartial])
+  }, [surveyId, includePartial, filters])
 
   useEffect(() => {
     if (!surveyId || !x || !y || x === y) return
     let active = true
-    fetchSurveyCrosstab(surveyId, x, y, includePartial).then(data => {
+    fetchSurveyCrosstab(surveyId, x, y, includePartial, filters).then(data => {
       if (active) setTable(data)
     }).catch(() => { if (active) setError('Could not load crosstabulation.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [surveyId, x, y, includePartial])
+  }, [surveyId, x, y, includePartial, filters])
 
   function selectX(key: string) {
     setX(key)
@@ -100,7 +104,7 @@ export default function Surveys() {
   async function downloadResponsesCSV() {
     if (!surveyId || !responses) return
     try {
-      const exportData = await fetchSurveyResponsesExport(surveyId, includePartial)
+      const exportData = await fetchSurveyResponsesExport(surveyId, includePartial, filters)
       const { questions: qs, rows, truncated } = exportData
       const header = ['"Respondent ID"', ...qs.map(q => `"${csvCell(q.text)}"`)].join(',')
       const dataRows = rows.map(row =>
@@ -156,11 +160,17 @@ export default function Surveys() {
   const chosenSurvey = surveys.find(s => s.id === surveyId)
   const xQuestion = questions.find(q => q.key === x)?.text ?? ''
   const yQuestion = questions.find(q => q.key === y)?.text ?? ''
+  const cohortActive = filters ? toParams(filters).toString().length > 0 : false
 
   return <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-8">
     <div>
       <h2 className="text-xl font-semibold text-gray-900">Survey Analytics</h2>
-      <p className="mt-1 text-sm text-gray-600">Aggregate analysis of submitted survey completions across all organisations. Cohort filters do not apply. Multi-select answers count in each selected category.</p>
+      <p className="mt-1 text-sm text-gray-600">
+        Aggregate analysis of submitted survey completions across all organisations. Multi-select answers count in each selected category.
+        {cohortActive
+          ? ' Results are scoped to the active cohort — only respondents linked to matching patients are included.'
+          : ' No cohort filters are active — all responses are shown.'}
+      </p>
     </div>
 
     {/* Survey picker — hidden when there is only one survey */}

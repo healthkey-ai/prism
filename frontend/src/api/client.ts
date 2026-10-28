@@ -61,7 +61,7 @@ api.interceptors.response.use(
   }
 )
 
-function toParams(filters: CohortFilters): URLSearchParams {
+export function toParams(filters: CohortFilters): URLSearchParams {
   const p = new URLSearchParams()
   for (const [key, val] of Object.entries(filters)) {
     if (val === undefined || val === null || val === '') continue
@@ -96,8 +96,10 @@ export async function fetchSurveyQuestions(id: string): Promise<SurveyQuestion[]
   return data
 }
 
-export async function fetchSurveyCrosstab(id: string, x: string, y: string, includePartial = false): Promise<SurveyCrosstab> {
-  const params = new URLSearchParams({ x, y })
+export async function fetchSurveyCrosstab(id: string, x: string, y: string, includePartial = false, filters?: CohortFilters): Promise<SurveyCrosstab> {
+  const params = filters ? toParams(filters) : new URLSearchParams()
+  params.set('x', x)
+  params.set('y', y)
   if (includePartial) params.set('include_partial', 'true')
   const { data } = await api.get<SurveyCrosstab>(`/surveys/${id}/crosstab/?${params}`)
   return data
@@ -107,8 +109,8 @@ export interface SurveyResponseOption { label: string; count: number; pct: numbe
 export interface SurveyResponseQuestion { key: string; text: string; n: number; options: SurveyResponseOption[] }
 export interface SurveyResponsesData { total_responses: number; include_partial: boolean; questions: SurveyResponseQuestion[] }
 
-export async function fetchSurveyResponses(id: string, includePartial = false): Promise<SurveyResponsesData> {
-  const params = new URLSearchParams()
+export async function fetchSurveyResponses(id: string, includePartial = false, filters?: CohortFilters): Promise<SurveyResponsesData> {
+  const params = filters ? toParams(filters) : new URLSearchParams()
   if (includePartial) params.set('include_partial', 'true')
   const { data } = await api.get<SurveyResponsesData>(`/surveys/${id}/responses/?${params}`)
   return data
@@ -121,8 +123,8 @@ export interface SurveyResponseExport {
   truncated: boolean
 }
 
-export async function fetchSurveyResponsesExport(id: string, includePartial = false): Promise<SurveyResponseExport> {
-  const params = new URLSearchParams()
+export async function fetchSurveyResponsesExport(id: string, includePartial = false, filters?: CohortFilters): Promise<SurveyResponseExport> {
+  const params = filters ? toParams(filters) : new URLSearchParams()
   if (includePartial) params.set('include_partial', 'true')
   const { data } = await api.get<SurveyResponseExport>(`/surveys/${id}/responses/export/?${params}`)
   return data

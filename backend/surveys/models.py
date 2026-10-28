@@ -73,9 +73,10 @@ class SurveyLinkedContact(models.Model):
         db_column="response_id",
     )
     email = models.CharField(max_length=254)
-    # consent_withdrawn will be mirrored here once PROMOP adds the column
-    # (healthkey-ai/promop#2079). Until then all emails are included when
-    # include_email=True is requested.
+    # Mirrored from PROMOP once healthkey-ai/promop#2084 adds the column.
+    # Until then, filtering on this field raises ProgrammingError which is
+    # caught by _cohort_response_ids() in views.py to degrade gracefully.
+    patient_id = models.UUIDField(null=True, db_column="patient_id")
 
     class Meta:
         managed = False

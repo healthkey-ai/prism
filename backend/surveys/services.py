@@ -154,7 +154,7 @@ def _summaries(samples):
     ]
 
 
-def question_responses(survey, include_partial=False):
+def question_responses(survey, include_partial=False, response_ids=None):
     """Per-question marginal option counts for all eligible categorical questions."""
     catalog = question_catalog(survey, include_partial=include_partial)
     categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
@@ -163,6 +163,8 @@ def question_responses(survey, include_partial=False):
     response_filter = {"survey_version__survey": survey}
     if not include_partial:
         response_filter["status"] = "submitted"
+    if response_ids is not None:
+        response_filter["id__in"] = response_ids
 
     total_responses = SurveyResponse.objects.filter(**response_filter).count()
 
@@ -209,7 +211,7 @@ def question_responses(survey, include_partial=False):
     }
 
 
-def response_export(survey, include_partial=False):
+def response_export(survey, include_partial=False, response_ids=None):
     """Return de-identified per-response answer data for CSV export."""
     catalog = question_catalog(survey, include_partial=include_partial)
     categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
@@ -219,6 +221,8 @@ def response_export(survey, include_partial=False):
     response_filter = {"survey_version__survey": survey}
     if not include_partial:
         response_filter["status"] = "submitted"
+    if response_ids is not None:
+        response_filter["id__in"] = response_ids
 
     questions_qs = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=keys
@@ -254,7 +258,7 @@ def response_export(survey, include_partial=False):
     }
 
 
-def crosstab(survey, x_key, y_key, include_partial=False):
+def crosstab(survey, x_key, y_key, include_partial=False, response_ids=None):
     catalog = {q["key"]: q for q in question_catalog(survey, include_partial=include_partial)}
     x_info = catalog.get(x_key, {})
     y_info = catalog.get(y_key, {})
@@ -275,6 +279,8 @@ def crosstab(survey, x_key, y_key, include_partial=False):
     response_filter = {"survey_version__survey": survey}
     if not include_partial:
         response_filter["status"] = "submitted"
+    if response_ids is not None:
+        response_filter["id__in"] = response_ids
     responses = SurveyResponse.objects.filter(
         **response_filter
     ).prefetch_related(Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=[x_key, y_key])))
