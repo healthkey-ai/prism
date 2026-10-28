@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import connection, transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser
@@ -9,6 +9,23 @@ from .services import crosstab, question_catalog, question_responses, response_e
 
 # Query params that are survey-specific and should not be treated as cohort filters.
 _SURVEY_PARAMS = frozenset({"include_partial", "x", "y"})
+
+
+def _patient_link_available():
+    """Whether PROlog's linked-contact table carries the patient link (patient_id).
+
+    Until it does, survey responses cannot be matched to a clinical cohort, so
+    cohort filters say nothing about them. Checked by introspection on each call,
+    so a deployment that later adds the column picks it up without a restart.
+    """
+    try:
+        with connection.cursor() as cursor:
+            columns = connection.introspection.get_table_description(
+                cursor, SurveyLinkedContact._meta.db_table
+            )
+    except Exception:
+        return False
+    return any(column.name == "patient_id" for column in columns)
 
 
 def _cohort_response_ids(request):
@@ -24,6 +41,12 @@ def _cohort_response_ids(request):
     """
     cohort_params = {k for k in request.query_params if k not in _SURVEY_PARAMS}
     if not cohort_params:
+        return None
+    if not _patient_link_available():
+        # Checked up front, not left to the query below failing: when the cohort
+        # has no patients, `patient_id__in=[]` is short-circuited by Django and
+        # never reaches the database, so it would return an empty set and hide
+        # every response instead of falling back to all of them.
         return None
     try:
         # Wrap in a savepoint so any DB error (e.g. missing table in tests, or

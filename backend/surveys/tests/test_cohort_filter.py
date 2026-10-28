@@ -203,3 +203,53 @@ def test_survey_responses_view_with_unknown_cohort_param_degrades_gracefully(sur
     data = resp.json()
     # Graceful degradation: all responses shown (n=1)
     assert data["questions"][0]["n"] == 1
+
+
+# ---------------------------------------------------------------------------
+# No patient link: cohort filters must not hide responses
+# ---------------------------------------------------------------------------
+
+def _empty_cohort():
+    """A cohort with no patients, as PatientInfo filtering returns on a
+    database whose survey respondents have no clinical record."""
+    qs = MagicMock()
+    qs.values_list.return_value = []
+    return qs
+
+
+@pytest.mark.django_db
+def test_cohort_ignored_when_responses_cannot_be_linked(survey_tables):
+    """The real-world case: cohort params set, the cohort is empty, and the link
+    column is absent. Must be None (all responses), not an empty set."""
+    from surveys.views import _cohort_response_ids
+    request = MagicMock()
+    request.query_params = {"disease": "Some Disease"}
+    with patch("surveys.views._patient_link_available", return_value=False), \
+            patch("cohorts.filters.apply_cohort_filters") as cohort:
+        assert _cohort_response_ids(request) is None
+        cohort.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_empty_cohort_with_patient_link_returns_no_responses(survey_tables):
+    """With the link in place, an empty cohort really does mean no responses."""
+    from surveys.views import _cohort_response_ids
+    request = MagicMock()
+    request.query_params = {"disease": "Some Disease"}
+    with patch("surveys.views._patient_link_available", return_value=True), \
+            patch("accounts.utils.apply_org_scope", side_effect=lambda qs, user: (qs, None)), \
+            patch("cohorts.filters.apply_cohort_filters", return_value=_empty_cohort()):
+        assert _cohort_response_ids(request) == set()
+
+
+@pytest.mark.django_db
+def test_patient_link_available_reads_the_table(survey_tables):
+    from surveys.views import _patient_link_available
+    # The test table is created from the mirror, which declares patient_id.
+    assert _patient_link_available() is True
+    with patch("surveys.views.connection.introspection.get_table_description",
+               return_value=[SimpleNamespace(name="id"), SimpleNamespace(name="email")]):
+        assert _patient_link_available() is False
+    with patch("surveys.views.connection.introspection.get_table_description",
+               side_effect=Exception("no such table")):
+        assert _patient_link_available() is False
