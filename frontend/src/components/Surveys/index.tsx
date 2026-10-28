@@ -100,11 +100,28 @@ export default function Surveys() {
   async function downloadResponsesCSV() {
     if (!surveyId || !responses) return
     try {
-      const exportData = await fetchSurveyResponsesExport(surveyId, includePartial)
+      // Try to include emails (requires view-contacts permission); fall back
+      // to a no-email export if the server returns 403.
+      let exportData: Awaited<ReturnType<typeof fetchSurveyResponsesExport>>
+      let hasEmail = false
+      try {
+        exportData = await fetchSurveyResponsesExport(surveyId, includePartial, true)
+        hasEmail = true
+      } catch {
+        exportData = await fetchSurveyResponsesExport(surveyId, includePartial, false)
+      }
       const { questions: qs, rows, truncated } = exportData
-      const header = ['"Respondent ID"', '"Email"', ...qs.map(q => `"${csvCell(q.text)}"`)].join(',')
+      const header = [
+        '"Respondent ID"',
+        ...(hasEmail ? ['"Email"'] : []),
+        ...qs.map(q => `"${csvCell(q.text)}"`)
+      ].join(',')
       const dataRows = rows.map(row =>
-        [`"${csvCell(row.respondent_id)}"`, `"${csvCell(row.email)}"`, ...qs.map(q => `"${csvCell(row.answers[q.key] ?? '')}"`)].join(',')
+        [
+          `"${csvCell(row.respondent_id)}"`,
+          ...(hasEmail ? [`"${csvCell(row.email ?? '')}"`] : []),
+          ...qs.map(q => `"${csvCell(row.answers[q.key] ?? '')}"`)
+        ].join(',')
       )
       const csv = [header, ...dataRows].join('\n')
       if (truncated) setError('Export truncated at 10 000 rows. Contact support for a full extract.')
