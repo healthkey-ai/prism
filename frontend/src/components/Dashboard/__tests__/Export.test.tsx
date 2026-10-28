@@ -48,6 +48,10 @@ const STAFF_USER = {
 
 const MINIMAL_METRICS = {
   cohort: { count: 5 },
+  // Need at least one real data point so outcomesHasContent is true and the
+  // Outcomes tab (not Surveys) is the default — the export button is hidden
+  // on the Surveys tab.
+  survival: { os: { n: 5 } },
 } as never
 
 beforeEach(() => vi.clearAllMocks())
