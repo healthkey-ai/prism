@@ -78,7 +78,7 @@ function EligibilityCard({ data, onExport }: { data: NonNullable<MetricsResponse
   )
 }
 
-export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId, filters }: Props) {
+export default function Dashboard({ metrics, loading, disease, user, onLogout, activeSavedCohortId: _activeSavedCohortId, filters }: Props) {
   const canExport =
     user.is_premium === true ||
     user.is_staff === true ||
