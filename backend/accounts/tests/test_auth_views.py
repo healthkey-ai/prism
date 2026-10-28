@@ -1,7 +1,10 @@
 import pytest
 from django.core import mail
+from django.utils import timezone
+from datetime import timedelta
 
 from accounts.models import Identity, PasswordResetToken
+from accounts.views import LOCKOUT_THRESHOLD
 
 LOGIN_URL = "/api/auth/login/"
 SIGNUP_URL = "/api/auth/signup/"
@@ -220,3 +223,96 @@ class TestAuthConfigView:
     def test_reports_signup_disabled(self, api_client, settings):
         settings.SIGNUP_ENABLED = False
         assert api_client.get(CONFIG_URL).data == {"signup_enabled": False}
+
+
+@pytest.mark.django_db
+class TestLoginLockout:
+    """Per-account lockout behaviour in login_view."""
+
+    def test_successful_login_resets_failed_count(self, api_client, make_user):
+        user = make_user(email="lock@example.com", password="TestPass123!")
+        # Simulate some prior failures stored in the DB.
+        Identity.objects.filter(pk=user.pk).update(failed_login_count=3)
+
+        resp = api_client.post(LOGIN_URL, {"email": "lock@example.com", "password": "TestPass123!"})
+        assert resp.status_code == 200
+
+        user.refresh_from_db()
+        assert user.failed_login_count == 0
+        assert user.locked_until is None
+
+    def test_failed_login_increments_count(self, api_client, make_user):
+        user = make_user(email="fail@example.com", password="TestPass123!")
+
+        api_client.post(LOGIN_URL, {"email": "fail@example.com", "password": "WrongPass!"})
+
+        user.refresh_from_db()
+        assert user.failed_login_count == 1
+
+    def test_multiple_failures_accumulate(self, api_client, make_user):
+        user = make_user(email="multi@example.com", password="TestPass123!")
+
+        for _ in range(3):
+            api_client.post(LOGIN_URL, {"email": "multi@example.com", "password": "WrongPass!"})
+
+        user.refresh_from_db()
+        assert user.failed_login_count == 3
+        assert user.locked_until is None  # not yet at threshold
+
+    def test_lockout_after_threshold_failures(self, api_client, make_user):
+        user = make_user(email="lockme@example.com", password="TestPass123!")
+        # Pre-seed count to one below threshold.
+        Identity.objects.filter(pk=user.pk).update(failed_login_count=LOCKOUT_THRESHOLD - 1)
+
+        # This failure crosses the threshold.
+        resp = api_client.post(LOGIN_URL, {"email": "lockme@example.com", "password": "WrongPass!"})
+        assert resp.status_code == 401  # the triggering attempt still returns 401
+
+        user.refresh_from_db()
+        assert user.failed_login_count >= LOCKOUT_THRESHOLD
+        assert user.locked_until is not None
+        assert user.locked_until > timezone.now()
+
+    def test_locked_account_returns_403(self, api_client, make_user):
+        user = make_user(email="locked@example.com", password="TestPass123!")
+        # Lock the account directly.
+        Identity.objects.filter(pk=user.pk).update(
+            failed_login_count=LOCKOUT_THRESHOLD,
+            locked_until=timezone.now() + timedelta(minutes=15),
+        )
+
+        resp = api_client.post(LOGIN_URL, {"email": "locked@example.com", "password": "TestPass123!"})
+        assert resp.status_code == 403
+        assert "locked" in resp.data["detail"].lower()
+
+    def test_locked_account_correct_password_still_returns_403(self, api_client, make_user):
+        """Even a correct password must not succeed while the account is locked."""
+        user = make_user(email="locked2@example.com", password="TestPass123!")
+        Identity.objects.filter(pk=user.pk).update(
+            failed_login_count=LOCKOUT_THRESHOLD,
+            locked_until=timezone.now() + timedelta(minutes=15),
+        )
+
+        resp = api_client.post(LOGIN_URL, {"email": "locked2@example.com", "password": "TestPass123!"})
+        assert resp.status_code == 403
+
+    def test_expired_lockout_allows_login_and_resets_count(self, api_client, make_user):
+        """After locked_until passes, a correct password logs in and clears the lockout state."""
+        user = make_user(email="expired@example.com", password="TestPass123!")
+        # Set locked_until in the past so the lock has expired.
+        Identity.objects.filter(pk=user.pk).update(
+            failed_login_count=LOCKOUT_THRESHOLD,
+            locked_until=timezone.now() - timedelta(seconds=1),
+        )
+
+        resp = api_client.post(LOGIN_URL, {"email": "expired@example.com", "password": "TestPass123!"})
+        assert resp.status_code == 200
+
+        user.refresh_from_db()
+        assert user.failed_login_count == 0
+        assert user.locked_until is None
+
+    def test_unknown_email_returns_401_without_error(self, api_client):
+        """No Identity record must not cause a crash; still returns 401 (no info leak)."""
+        resp = api_client.post(LOGIN_URL, {"email": "nobody@example.com", "password": "WrongPass!"})
+        assert resp.status_code == 401
