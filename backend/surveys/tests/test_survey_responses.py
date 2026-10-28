@@ -1,5 +1,4 @@
 import uuid
-from unittest.mock import MagicMock
 
 import pytest
 from django.db import connection
@@ -133,9 +132,8 @@ def test_question_responses_multiple_options_sorted_by_count(survey_tables):
 
 
 @pytest.mark.django_db
-def test_response_export_no_email_by_default(survey_tables):
-    """Default export omits email; SurveyLinkedContact is never joined."""
-    survey = Survey.objects.create(id=uuid.uuid4(), slug="resp-export-nomail", title="Response export nomail")
+def test_response_export_structure(survey_tables):
+    survey = Survey.objects.create(id=uuid.uuid4(), slug="resp-export", title="Response export")
     version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
     q = SurveyQuestion.objects.create(
         survey_version=version, key="treatment", type="single", order=1, text="Treatment",
@@ -146,8 +144,6 @@ def test_response_export_no_email_by_default(survey_tables):
     SurveyAnswer.objects.create(response=r1, question_key="treatment", value={"option": "br"})
     r2 = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
     SurveyAnswer.objects.create(response=r2, question_key="treatment", value={"option": "br"})
-    # Attach an email contact to r2 — should NOT appear in the export
-    SurveyLinkedContact.objects.create(response=r2, email="user@example.com")
 
     result = response_export(survey)
     assert result["questions"] == [{"key": "treatment", "text": "Treatment"}]
@@ -155,87 +151,10 @@ def test_response_export_no_email_by_default(survey_tables):
     ids = {row["respondent_id"] for row in result["rows"]}
     assert str(r1.id) in ids
     assert str(r2.id) in ids
-    # No row should carry an email key when include_email is False (default)
     for row in result["rows"]:
         assert "email" not in row
     row1 = next(row for row in result["rows"] if row["respondent_id"] == str(r1.id))
     assert row1["answers"]["treatment"] == "BR"
-
-
-@pytest.mark.django_db
-def test_response_export_include_email_returns_all_contacts(survey_tables):
-    """include_email=True returns emails for all respondents with a linked contact.
-
-    Consent-withdrawn filtering will be added once PROMOP adds the
-    consent_withdrawn column (healthkey-ai/promop#2079).
-    """
-    survey = Survey.objects.create(id=uuid.uuid4(), slug="resp-export-email", title="Response export email")
-    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
-    q = SurveyQuestion.objects.create(
-        survey_version=version, key="country", type="single", order=1, text="Country",
-    )
-    SurveyOption.objects.create(question=q, key="us", order=0, label="USA", free_text=False)
-
-    r_with_email = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
-    SurveyAnswer.objects.create(response=r_with_email, question_key="country", value={"option": "us"})
-    SurveyLinkedContact.objects.create(response=r_with_email, email="alice@example.com")
-
-    r_no_contact = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
-    SurveyAnswer.objects.create(response=r_no_contact, question_key="country", value={"option": "us"})
-
-    result = response_export(survey, include_email=True)
-    assert len(result["rows"]) == 2
-    by_id = {row["respondent_id"]: row for row in result["rows"]}
-
-    assert by_id[str(r_with_email.id)]["email"] == "alice@example.com"
-    assert by_id[str(r_no_contact.id)]["email"] == ""
-
-
-def _staff_user(has_view_contacts=False):
-    """Return a mock staff user; optionally grant surveys.view_contacts."""
-    user = MagicMock()
-    user.is_authenticated = True
-    user.is_staff = True
-    user.has_perm = lambda perm: perm == "surveys.view_contacts" and has_view_contacts
-    return user
-
-
-@pytest.mark.django_db
-def test_export_include_email_requires_view_contacts_permission(survey_tables):
-    """Staff without view_contacts perm receives 403 when include_email=true."""
-    survey = Survey.objects.create(id=uuid.uuid4(), slug="resp-403", title="Resp 403")
-    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
-    q = SurveyQuestion.objects.create(
-        survey_version=version, key="country", type="single", order=1, text="Country",
-    )
-    SurveyOption.objects.create(question=q, key="us", order=0, label="USA", free_text=False)
-
-    client = APIClient()
-    client.force_authenticate(user=_staff_user(has_view_contacts=False))
-    resp = client.get(f"/api/surveys/{survey.pk}/responses/export/?include_email=true")
-    assert resp.status_code == 403
-
-
-@pytest.mark.django_db
-def test_export_include_email_allowed_for_view_contacts_user(survey_tables):
-    """Staff with view_contacts perm receives emails in the response."""
-    survey = Survey.objects.create(id=uuid.uuid4(), slug="resp-200", title="Resp 200")
-    version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
-    q = SurveyQuestion.objects.create(
-        survey_version=version, key="country", type="single", order=1, text="Country",
-    )
-    SurveyOption.objects.create(question=q, key="us", order=0, label="USA", free_text=False)
-    r = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
-    SurveyAnswer.objects.create(response=r, question_key="country", value={"option": "us"})
-    SurveyLinkedContact.objects.create(response=r, email="alice@example.com")
-
-    client = APIClient()
-    client.force_authenticate(user=_staff_user(has_view_contacts=True))
-    resp = client.get(f"/api/surveys/{survey.pk}/responses/export/?include_email=true")
-    assert resp.status_code == 200
-    rows = resp.json()["rows"]
-    assert len(rows) == 1
-    assert rows[0]["email"] == "alice@example.com"
 
 
 @pytest.mark.django_db

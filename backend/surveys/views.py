@@ -3,7 +3,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
-from accounts.permissions import CanViewContacts
 from .models import Survey
 from .services import crosstab, question_catalog, question_responses, response_export, survey_catalog
 
@@ -40,13 +39,7 @@ def survey_responses_export(request, survey_id):
     if survey is None:
         return Response({"detail": "Survey not found."}, status=status.HTTP_404_NOT_FOUND)
     include_partial = request.query_params.get("include_partial", "").lower() in ("1", "true")
-    include_email = request.query_params.get("include_email", "").lower() in ("1", "true")
-    if include_email and not CanViewContacts().has_permission(request, None):
-        return Response(
-            {"detail": "Contact viewing permission required."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    return Response(response_export(survey, include_partial=include_partial, include_email=include_email))
+    return Response(response_export(survey, include_partial=include_partial))
 
 
 @api_view(["GET"])
