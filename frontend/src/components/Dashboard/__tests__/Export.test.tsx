@@ -46,13 +46,9 @@ const STAFF_USER = {
   is_staff: true, is_premium: false, role: null, is_org_admin: false,
 }
 
-const MINIMAL_METRICS = {
-  cohort: { count: 5 },
-  // Need at least one real data point so outcomesHasContent is true and the
-  // Outcomes tab (not Surveys) is the default — the export button is hidden
-  // on the Surveys tab.
-  survival: { os: { n: 5 } },
-} as never
+// null triggers !metrics === true so all *HasContent flags are true and all
+// tabs are visible without needing a complete data fixture.
+const MINIMAL_METRICS = null as never
 
 beforeEach(() => vi.clearAllMocks())
 

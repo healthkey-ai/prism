@@ -237,7 +237,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           </div>
 
           {/* Export cohort button */}
-          {tab === 'surveys' ? null : canExport ? (
+          {canExport ? (
             <button
               onClick={handleExport}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
