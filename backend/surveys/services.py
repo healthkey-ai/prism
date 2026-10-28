@@ -92,7 +92,19 @@ def _labels(question, value):
         selected = [value.get(question.type)]
     if question.type == "matrix":
         # A matrix has several row values, each a separate categorical answer.
-        selected = [f"{row}: {answer}" for row, answer in (value.get("ratings") or {}).items()]
+        # option_labels holds the column (answer) labels.  Row labels come from
+        # the question's row definitions if available (a related manager or
+        # attribute named `rows`); otherwise we fall back to the raw row key so
+        # the output is still usable even when the row model is not mirrored.
+        ratings = value.get("ratings") or {}
+        row_labels = {}
+        rows_attr = getattr(question, "rows", None)
+        if rows_attr is not None and callable(getattr(rows_attr, "all", None)):
+            row_labels = {r.key: r.label for r in rows_attr.all()}
+        selected = [
+            f"{row_labels.get(row, row)}: {option_labels.get(answer, answer)}"
+            for row, answer in ratings.items()
+        ]
     if question.type == "ranking":
         return [f"{position}: {option_labels.get(key, key)}" for position, key in
                 enumerate(value.get("order") or [], start=1)]

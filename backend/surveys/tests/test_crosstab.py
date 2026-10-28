@@ -110,6 +110,82 @@ def test_ranking_answers_keep_their_positions():
     assert _labels(question, {"order": ["b", "a"]}) == ["1: Fewer visits", "2: Remission"]
 
 
+def test_matrix_resolves_column_and_row_keys_via_labels():
+    """Both row keys and column (answer) keys are resolved to human-readable labels."""
+    from surveys.services import _labels, eligible
+
+    question = SimpleNamespace(
+        type="matrix",
+        text="Rate your experience",
+        # Column options (the scale values stored in SurveyOption).
+        options=SimpleNamespace(all=lambda: [
+            SimpleNamespace(key="agree", label="Agree"),
+            SimpleNamespace(key="disagree", label="Disagree"),
+            SimpleNamespace(key="neutral", label="Neutral"),
+        ]),
+        # Row definitions supplied via a related manager mirror.
+        rows=SimpleNamespace(all=lambda: [
+            SimpleNamespace(key="q1_row_1", label="Fatigue"),
+            SimpleNamespace(key="q1_row_2", label="Pain"),
+        ]),
+    )
+    assert eligible(question)
+    result = _labels(question, {"ratings": {"q1_row_1": "agree", "q1_row_2": "disagree"}})
+    assert result == ["Fatigue: Agree", "Pain: Disagree"]
+
+
+def test_matrix_falls_back_to_row_key_when_no_rows_manager():
+    """When no row model is available the row key is used as-is; column key is still resolved."""
+    from surveys.services import _labels
+
+    # No `rows` attribute — simulates the case where the row model isn't mirrored.
+    question = SimpleNamespace(
+        type="matrix",
+        text="Rate your experience",
+        options=SimpleNamespace(all=lambda: [
+            SimpleNamespace(key="agree", label="Agree"),
+        ]),
+        # deliberately omit `rows`
+    )
+    result = _labels(question, {"ratings": {"q1_row_1": "agree", "unknown_col": "other_key"}})
+    # Row key falls back to raw key; column key is resolved where possible.
+    assert result == ["q1_row_1: Agree", "unknown_col: other_key"]
+
+
+def test_matrix_empty_ratings_returns_empty():
+    """An empty ratings dict (or missing key) produces no labels and does not crash."""
+    from surveys.services import _labels
+
+    question = SimpleNamespace(
+        type="matrix",
+        text="Rate your experience",
+        options=SimpleNamespace(all=lambda: []),
+    )
+    assert _labels(question, {"ratings": {}}) == []
+    assert _labels(question, {}) == []
+    assert _labels(question, {"skipped": True}) == []
+
+
+def test_matrix_column_key_resolution_without_row_model():
+    """Column (answer) key resolution works even when option_labels covers only some keys."""
+    from surveys.services import _labels
+
+    question = SimpleNamespace(
+        type="matrix",
+        text="Symptoms",
+        options=SimpleNamespace(all=lambda: [
+            SimpleNamespace(key="often", label="Often"),
+            SimpleNamespace(key="rarely", label="Rarely"),
+        ]),
+    )
+    value = {"ratings": {"fatigue_row": "often", "nausea_row": "rarely", "pain_row": "unknown_key"}}
+    result = _labels(question, value)
+    # Column keys resolved where present; unknown column key falls back to raw key.
+    assert "fatigue_row: Often" in result
+    assert "nausea_row: Rarely" in result
+    assert "pain_row: unknown_key" in result
+
+
 @pytest.mark.parametrize("type_, value", [("number", 42), ("date", "2026-01-02")])
 def test_structured_values_remain_eligible(type_, value):
     from surveys.services import _labels, eligible
