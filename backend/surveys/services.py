@@ -7,7 +7,7 @@ from collections import Counter
 from django.db.models import Count, Prefetch, Q
 
 from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
-from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse
+from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse, SurveyVersion
 
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
@@ -65,12 +65,20 @@ def survey_catalog():
 def question_catalog(survey, include_partial=False):
     # Prefer the most recent question wording; a response is still interpreted
     # using the question and options belonging to its own instrument version.
-    qs_filter = {"survey_version__survey": survey}
+    #
+    # Versions are filtered with a subquery rather than a join to responses: the
+    # join produced one row per question per response, which then needed a
+    # DISTINCT, and with the version's definition selected alongside, that meant
+    # comparing the whole definition document across every row.
+    questions = SurveyQuestion.objects.filter(survey_version__survey=survey)
     if not include_partial:
-        qs_filter["survey_version__responses__status"] = "submitted"
-    questions = SurveyQuestion.objects.filter(
-        **qs_filter,
-    ).select_related("survey_version").order_by("-survey_version__created_at", "order").distinct()
+        answered = SurveyResponse.objects.filter(
+            survey_version__survey=survey, status="submitted"
+        ).values("survey_version_id")
+        questions = questions.filter(survey_version_id__in=answered)
+    questions = questions.order_by("-survey_version__created_at", "order").only(
+        "key", "text", "type", "order", "survey_version_id"
+    )
     seen = set()
     result = []
     for question in questions:
@@ -102,8 +110,22 @@ def _parse_definition(version_def):
     if not version_def:
         return "en", {}
     lang = version_def.get("default_language", "en") or "en"
-    by_key = {q["key"]: q for q in version_def.get("questions", []) if "key" in q}
+    # PROlog nests questions in sections; a flat "questions" list is accepted too.
+    questions = list(version_def.get("questions") or [])
+    for section in version_def.get("sections") or []:
+        questions.extend(section.get("questions") or [])
+    by_key = {q["key"]: q for q in questions if isinstance(q, dict) and "key" in q}
     return lang, by_key
+
+
+def _parsed_definitions(version_ids):
+    """Each version's definition, parsed once, by version id: one query per request,
+    rather than a definition read and re-parsed for every answer."""
+    return {
+        pk: _parse_definition(definition)
+        for pk, definition in SurveyVersion.objects.filter(pk__in=set(version_ids))
+        .values_list("pk", "definition")
+    }
 
 
 def _def_option_labels(by_key, question_key, lang):
@@ -193,11 +215,12 @@ def _def_scale_label(by_key, question_key, answer, lang):
     return None
 
 
-def _labels(question, value, version_def=None):
+def _labels(question, value, version_def=None, parsed=None):
+    """Labels for one answer. Pass `parsed` (from _parsed_definitions) when labelling
+    many answers; `version_def` is parsed on every call."""
     if not isinstance(value, dict) or value.get("skipped"):
         return []
-    # Parse definition once — shared by all three helpers to avoid repeated dict builds.
-    def_lang, def_by_key = _parse_definition(version_def)
+    def_lang, def_by_key = parsed if parsed is not None else _parse_definition(version_def)
     # Build option labels from the projection, then augment/override with
     # definition-sourced labels (resolves options_from references).
     option_labels = {o.key: o.label for o in question.options.all()}
@@ -299,10 +322,11 @@ def question_responses(survey, include_partial=False, response_ids=None):
 
     questions_qs = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=keys
-    ).select_related("survey_version").prefetch_related(
+    ).prefetch_related(
         Prefetch("options", queryset=SurveyOption.objects.order_by("order"))
     )
     by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+    definitions = _parsed_definitions(v for v, _ in by_version)
     catalog_by_key = {q["key"]: q for q in categorical}
 
     option_counts = {key: Counter() for key in keys}
@@ -317,8 +341,7 @@ def question_responses(survey, include_partial=False, response_ids=None):
             q = by_version.get((response.survey_version_id, key))
             if not q or q.type != catalog_by_key[key]["type"]:
                 continue
-            version_def = q.survey_version.definition
-            labels = _labels(q, answers.get(key), version_def=version_def)
+            labels = _labels(q, answers.get(key), parsed=definitions.get(q.survey_version_id))
             if labels:
                 respondent_counts[key] += 1
                 for label in labels:
@@ -358,10 +381,11 @@ def response_export(survey, include_partial=False, response_ids=None):
 
     questions_qs = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=keys
-    ).select_related("survey_version").prefetch_related(
+    ).prefetch_related(
         Prefetch("options", queryset=SurveyOption.objects.order_by("order"))
     )
     by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+    definitions = _parsed_definitions(v for v, _ in by_version)
 
     responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
         Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
@@ -379,8 +403,7 @@ def response_export(survey, include_partial=False, response_ids=None):
             q = by_version.get((response.survey_version_id, key))
             if not q or q.type != catalog_by_key[key]["type"]:
                 continue
-            version_def = q.survey_version.definition
-            labels = _labels(q, answers.get(key), version_def=version_def)
+            labels = _labels(q, answers.get(key), parsed=definitions.get(q.survey_version_id))
             row[key] = "; ".join(labels) if labels else ""
         collected.append({"id": response.id, "answers": row})
 
@@ -401,10 +424,11 @@ def crosstab(survey, x_key, y_key, include_partial=False, response_ids=None):
     y_numeric = _is_numeric(y_info.get("type"), y_key, y_info.get("text", ""))
     questions = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=[x_key, y_key]
-    ).select_related("survey_version").prefetch_related(
+    ).prefetch_related(
         Prefetch("options", queryset=SurveyOption.objects.order_by("order"))
     )
     by_version = {(q.survey_version_id, q.key): q for q in questions if eligible(q)}
+    definitions = _parsed_definitions(v for v, _ in by_version)
     counts = Counter()
     x_option_counts: Counter = Counter()
     y_option_counts: Counter = Counter()
@@ -429,13 +453,11 @@ def crosstab(survey, x_key, y_key, include_partial=False, response_ids=None):
             continue
         x_number = _numeric_value(xq, answers.get(x_key)) if x_numeric else None
         y_number = _numeric_value(yq, answers.get(y_key)) if y_numeric else None
-        x_def = xq.survey_version.definition
-        y_def = yq.survey_version.definition
         xs = ["All paired responses"] if x_numeric and x_number is not None else (
-            _labels(xq, answers.get(x_key), version_def=x_def) if not x_numeric else []
+            _labels(xq, answers.get(x_key), parsed=definitions.get(xq.survey_version_id)) if not x_numeric else []
         )
         ys = ["All paired responses"] if y_numeric and y_number is not None else (
-            _labels(yq, answers.get(y_key), version_def=y_def) if not y_numeric else []
+            _labels(yq, answers.get(y_key), parsed=definitions.get(yq.survey_version_id)) if not y_numeric else []
         )
         if xs:
             x_n += 1
