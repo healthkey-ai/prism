@@ -73,6 +73,9 @@ class SurveyLinkedContact(models.Model):
         db_column="response_id",
     )
     email = models.CharField(max_length=254)
+    # consent_withdrawn will be mirrored here once PROMOP adds the column
+    # (healthkey-ai/promop#2079). Until then all emails are included when
+    # include_email=True is requested.
 
     class Meta:
         managed = False
