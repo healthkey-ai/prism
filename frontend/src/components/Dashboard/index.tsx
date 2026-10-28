@@ -36,7 +36,7 @@ interface Props {
   disease: string
   user: User
   onLogout: () => void
-  activeSavedCohortId: number | null
+  activeSavedCohortId?: number | null
   filters: CohortFilters
 }
 
@@ -168,23 +168,19 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
   }
 
   async function handleExport() {
-    if (!activeSavedCohortId) {
-      alert('Save your current cohort first (use the "Save" button in the left panel), then export.')
-      return
-    }
+    const p = toFilterParams()
+    p.set('chart', 'cohort_characterization')
+    p.set('file_format', 'csv')
     try {
-      const resp = await api.get(
-        `/cohorts/saved/${activeSavedCohortId}/export/?file_format=csv`,
-        { responseType: 'blob' }
-      )
+      const resp = await api.get(`/export/?${p.toString()}`, { responseType: 'blob' })
       const url = URL.createObjectURL(new Blob([resp.data]))
       const a = document.createElement('a')
-      const disposition = resp.headers['content-disposition'] ?? ''
-      const match = disposition.match(/filename="([^"]+)"/)
       a.href = url
-      a.download = match ? match[1] : 'cohort.csv'
+      a.download = 'cohort_export.csv'
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
       alert('Export failed. Please try again.')
     }
@@ -241,7 +237,7 @@ export default function Dashboard({ metrics, loading, disease, user, onLogout, a
           </div>
 
           {/* Export cohort button */}
-          {tab === 'surveys' ? null : canExport ? (
+          {canExport ? (
             <button
               onClick={handleExport}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
