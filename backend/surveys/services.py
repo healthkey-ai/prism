@@ -244,15 +244,15 @@ def response_export(survey, include_partial=False, include_email=False):
         collected.append({"id": response.id, "answers": row})
 
     if include_email:
-        # Bulk-fetch emails for respondents who have NOT withdrawn consent.
-        # Exclude rows where consent_withdrawn is explicitly True; rows where
-        # it is False or NULL (not yet tracked) are included.
+        # Bulk-fetch emails for all collected responses.
+        # TODO: filter out withdrawn-consent respondents once PROMOP adds the
+        # consent_withdrawn column (healthkey-ai/promop#2079).
         response_ids = [r["id"] for r in collected]
         emails = {
             str(lc["response_id"]): lc["email"]
             for lc in SurveyLinkedContact.objects.filter(
                 response_id__in=response_ids,
-            ).exclude(consent_withdrawn=True).values("response_id", "email")
+            ).values("response_id", "email")
         }
         rows = [
             {

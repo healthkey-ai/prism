@@ -163,8 +163,12 @@ def test_response_export_no_email_by_default(survey_tables):
 
 
 @pytest.mark.django_db
-def test_response_export_include_email_with_consent_filter(survey_tables):
-    """include_email=True returns emails only for non-withdrawn respondents."""
+def test_response_export_include_email_returns_all_contacts(survey_tables):
+    """include_email=True returns emails for all respondents with a linked contact.
+
+    Consent-withdrawn filtering will be added once PROMOP adds the
+    consent_withdrawn column (healthkey-ai/promop#2079).
+    """
     survey = Survey.objects.create(id=uuid.uuid4(), slug="resp-export-email", title="Response export email")
     version = SurveyVersion.objects.create(survey=survey, version="1", created_at=timezone.now())
     q = SurveyQuestion.objects.create(
@@ -172,26 +176,18 @@ def test_response_export_include_email_with_consent_filter(survey_tables):
     )
     SurveyOption.objects.create(question=q, key="us", order=0, label="USA", free_text=False)
 
-    r_consented = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
-    SurveyAnswer.objects.create(response=r_consented, question_key="country", value={"option": "us"})
-    SurveyLinkedContact.objects.create(response=r_consented, email="consented@example.com", consent_withdrawn=False)
-
-    r_withdrawn = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
-    SurveyAnswer.objects.create(response=r_withdrawn, question_key="country", value={"option": "us"})
-    SurveyLinkedContact.objects.create(response=r_withdrawn, email="withdrawn@example.com", consent_withdrawn=True)
+    r_with_email = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+    SurveyAnswer.objects.create(response=r_with_email, question_key="country", value={"option": "us"})
+    SurveyLinkedContact.objects.create(response=r_with_email, email="alice@example.com")
 
     r_no_contact = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
     SurveyAnswer.objects.create(response=r_no_contact, question_key="country", value={"option": "us"})
 
     result = response_export(survey, include_email=True)
-    assert len(result["rows"]) == 3
+    assert len(result["rows"]) == 2
     by_id = {row["respondent_id"]: row for row in result["rows"]}
 
-    # Consented respondent has their email
-    assert by_id[str(r_consented.id)]["email"] == "consented@example.com"
-    # Withdrawn respondent's email is suppressed
-    assert by_id[str(r_withdrawn.id)]["email"] == ""
-    # Respondent with no contact record gets empty string
+    assert by_id[str(r_with_email.id)]["email"] == "alice@example.com"
     assert by_id[str(r_no_contact.id)]["email"] == ""
 
 
@@ -231,7 +227,7 @@ def test_export_include_email_allowed_for_view_contacts_user(survey_tables):
     SurveyOption.objects.create(question=q, key="us", order=0, label="USA", free_text=False)
     r = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
     SurveyAnswer.objects.create(response=r, question_key="country", value={"option": "us"})
-    SurveyLinkedContact.objects.create(response=r, email="alice@example.com", consent_withdrawn=False)
+    SurveyLinkedContact.objects.create(response=r, email="alice@example.com")
 
     client = APIClient()
     client.force_authenticate(user=_staff_user(has_view_contacts=True))
