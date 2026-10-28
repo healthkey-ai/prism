@@ -7,16 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Added
-
-- **Serving under a path prefix.** `VITE_BASE_PATH` (for example `/analytics/`) at frontend build time moves the asset URLs and the API client's base URL under that prefix, so PRism can share a host with another app. `VITE_CSRF_COOKIE_NAME` names the CSRF cookie the frontend reads, to match a non-default backend `CSRF_COOKIE_NAME`. The CSRF lookup is now anchored, so one cookie name never matches the tail of another. The defaults (`/` and `csrftoken`) leave existing deployments unchanged.
-
-### Fixed
-- **First `migrate` on a database PRomop already owns** no longer fails with `InconsistentMigrationHistory` (#64). PRomop records `admin.0001_initial`, which in PRism depends on `accounts.0001`; `accounts` now overrides `migrate` to apply that idempotent migration first, only in exactly that state.
-
 ### Planned
 
 - **OHDSI Atlas cohort export** — export a saved PRism cohort as an Atlas-compatible Circe JSON definition via `GET /api/cohorts/saved/{id}/export/atlas/`. Enables cohorts defined in PRism's point-and-click UI to be executed in OHDSI tools (PatientLevelPrediction, CohortMethod). Requires a concept mapping layer from PROMOP field values to OMOP vocabulary concept IDs.
+
+---
+
+## [1.0.3] — 2026-10-28
+
+### Added
+- **Survey responses grid** — staff can browse individual respondent rows, with respondent ID and email included in the CSV export (#76).
+- **Download links** — each survey tab and chart section exposes a one-click download button; chart download buttons use an icon-only style (#76).
+- **Per-option marginal counts** on crosstab heatmap axis labels show the row and column totals alongside each label (#75).
+- `n` and `%` added to survey cross-tab cells and per-question summary counts (#74).
+
+### Changed
+- **Configurable frontend path prefix** (`VITE_BASE_PATH`, e.g. `/analytics/`) sets Vite's `base` so PRism can share a host with another app at the same domain. The API client's base URL follows `BASE_URL` automatically. `VITE_CSRF_COOKIE_NAME` (default `csrftoken`) names the cookie the client reads, matching a non-default backend `CSRF_COOKIE_NAME`. With neither variable set the build is identical to before. (#69)
+- **CSRF lookup anchored to a cookie boundary** so `csrftoken` no longer matches the tail of `prism_csrftoken` or vice versa (#69).
+
+### Fixed
+- Partial survey responders (submitted but not fully complete) are now included in cross-tab analysis (#73).
+- **First `migrate` on a database PRomop already owns** no longer fails with `InconsistentMigrationHistory` (#64).
 
 ---
 

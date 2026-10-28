@@ -1,0 +1,18 @@
+name: Gate main
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  require-dev-base:
+    name: PR must come from dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        run: |
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "PRs to main must come from the dev branch (got: ${{ github.head_ref }})."
+            echo "Merge your feature branch into dev first, then open a PR from dev → main."
+            exit 1
+          fi
