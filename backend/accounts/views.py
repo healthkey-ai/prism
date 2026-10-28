@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
@@ -6,6 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.middleware.csrf import get_token
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -13,6 +15,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework import status
+
+LOCKOUT_THRESHOLD = 10
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +92,36 @@ def _send_password_link(identity, subject, intro):
 def login_view(request):
     email = request.data.get("email", "")
     password = request.data.get("password", "")
+
+    # Per-account lockout check — look up by email before calling authenticate().
+    identity = Identity.objects.filter(email__iexact=email).first()
+    if identity is not None and identity.locked_until is not None:
+        if identity.locked_until > timezone.now():
+            return Response(
+                {"detail": f"Account locked. Try again after {identity.locked_until.isoformat()}."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
     user = authenticate(request, username=email, password=password)
+
     if user is None:
+        # Increment failed_login_count race-safely; lock if threshold reached.
+        if identity is not None:
+            new_count = identity.failed_login_count + 1
+            if new_count >= LOCKOUT_THRESHOLD:
+                Identity.objects.filter(pk=identity.pk).update(
+                    failed_login_count=F("failed_login_count") + 1,
+                    locked_until=timezone.now() + timedelta(minutes=15),
+                )
+            else:
+                Identity.objects.filter(pk=identity.pk).update(
+                    failed_login_count=F("failed_login_count") + 1,
+                )
         return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Successful login — reset lockout state.
+    Identity.objects.filter(pk=user.pk).update(failed_login_count=0, locked_until=None)
+
     request.session.cycle_key()
     login(request, user)
     get_token(request)
