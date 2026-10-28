@@ -18,13 +18,23 @@ export interface SurveyCrosstab {
   }[]
 }
 
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/)
+// The CSRF cookie's name. Configurable at build time because PRism may share a
+// host with another Django app that sets its own `csrftoken`; the backend's
+// CSRF_COOKIE_NAME must match.
+const CSRF_COOKIE_NAME: string = import.meta.env.VITE_CSRF_COOKIE_NAME || 'csrftoken'
+
+// Anchored to a cookie boundary, so `csrftoken` never matches the tail of
+// another cookie's name (e.g. `prism_csrftoken`), and vice versa.
+export function getCsrfToken(cookie: string = document.cookie, name: string = CSRF_COOKIE_NAME): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`))
   return match ? match[1] : ''
 }
 
+// BASE_URL is Vite's `base`: '/' normally, '/analytics/' when PRism is served
+// under a path prefix (see vite.config.ts). It always ends with '/'.
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${import.meta.env.BASE_URL}api`,
   withCredentials: true,
 })
 
