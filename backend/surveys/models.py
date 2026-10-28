@@ -73,6 +73,10 @@ class SurveyLinkedContact(models.Model):
         db_column="response_id",
     )
     email = models.CharField(max_length=254)
+    # NOTE: consent_withdrawn is not yet tracked in the PROMOP
+    # prolog_surveys_surveylinkedcontact table. Once PROMOP adds the column,
+    # the consent filter in response_export() will gate withdrawn respondents.
+    consent_withdrawn = models.BooleanField(null=True, default=False)
 
     class Meta:
         managed = False
