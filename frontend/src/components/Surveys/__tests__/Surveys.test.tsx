@@ -4,6 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Surveys from '..'
 import * as client from '../../../api/client'
 
+function readBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsText(blob)
+  })
+}
+
 vi.mock('../../../api/client', () => ({
   fetchSurveys: vi.fn(),
   fetchSurveyQuestions: vi.fn(),
@@ -67,7 +76,7 @@ describe('downloadResponsesCSV', () => {
     await waitFor(() => expect(client.fetchSurveyResponsesExport).toHaveBeenCalledWith('survey-1', false, true))
     expect(createObjectURL).toHaveBeenCalledOnce()
     const blob: Blob = createObjectURL.mock.calls[0][0]
-    const text = await blob.text()
+    const text = await readBlob(blob)
     expect(text).toContain('"Email"')
     expect(text).toContain('alice@example.com')
   })
@@ -97,7 +106,7 @@ describe('downloadResponsesCSV', () => {
 
     await waitFor(() => expect(createObjectURL).toHaveBeenCalledOnce())
     const blob: Blob = createObjectURL.mock.calls[0][0]
-    const text = await blob.text()
+    const text = await readBlob(blob)
     expect(text).not.toContain('"Email"')
     expect(text).toContain('"Respondent ID"')
     expect(text).toContain('BR')
