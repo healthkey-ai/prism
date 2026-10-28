@@ -16,6 +16,7 @@ class SurveyVersion(models.Model):
     survey = models.ForeignKey(Survey, on_delete=models.DO_NOTHING, related_name="versions")
     version = models.CharField(max_length=32)
     created_at = models.DateTimeField()
+    definition = models.JSONField(null=True)
 
     class Meta:
         managed = False
