@@ -114,17 +114,16 @@ export async function fetchSurveyResponses(id: string, includePartial = false): 
   return data
 }
 
-export interface SurveyResponseExportRow { respondent_id: string; email?: string; answers: Record<string, string> }
+export interface SurveyResponseExportRow { respondent_id: string; answers: Record<string, string> }
 export interface SurveyResponseExport {
   questions: { key: string; text: string }[]
   rows: SurveyResponseExportRow[]
   truncated: boolean
 }
 
-export async function fetchSurveyResponsesExport(id: string, includePartial = false, includeEmail = false): Promise<SurveyResponseExport> {
+export async function fetchSurveyResponsesExport(id: string, includePartial = false): Promise<SurveyResponseExport> {
   const params = new URLSearchParams()
   if (includePartial) params.set('include_partial', 'true')
-  if (includeEmail) params.set('include_email', 'true')
   const { data } = await api.get<SurveyResponseExport>(`/surveys/${id}/responses/export/?${params}`)
   return data
 }

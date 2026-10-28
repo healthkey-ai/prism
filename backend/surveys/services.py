@@ -7,7 +7,7 @@ from collections import Counter
 from django.db.models import Count, Prefetch, Q
 
 from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
-from .models import Survey, SurveyAnswer, SurveyLinkedContact, SurveyOption, SurveyQuestion, SurveyResponse
+from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse
 
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
@@ -209,18 +209,8 @@ def question_responses(survey, include_partial=False):
     }
 
 
-def response_export(survey, include_partial=False, include_email=False):
-    """Return per-response answer data for CSV export.
-
-    Each row contains a respondent_id (UUID) and a dict of answer values keyed
-    by question key.  By default no contact information is included.
-
-    When include_email=True, each row also carries an ``email`` field populated
-    from SurveyLinkedContact.  Only respondents who have not withdrawn consent
-    (consent_withdrawn != True) receive a non-empty email; all others are
-    exported with an empty string.  Respondents who never provided a contact
-    are also exported with an empty string.
-    """
+def response_export(survey, include_partial=False):
+    """Return de-identified per-response answer data for CSV export."""
     catalog = question_catalog(survey, include_partial=include_partial)
     categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
     keys = [q["key"] for q in categorical]
@@ -255,33 +245,7 @@ def response_export(survey, include_partial=False, include_email=False):
             row[key] = "; ".join(labels) if labels else ""
         collected.append({"id": response.id, "answers": row})
 
-    if include_email:
-        # Bulk-fetch emails for all collected responses.
-        # TODO: filter out withdrawn-consent respondents once PROMOP adds the
-        # consent_withdrawn column (healthkey-ai/promop#2079).
-        response_ids = [r["id"] for r in collected]
-        emails = {
-            str(lc["response_id"]): lc["email"]
-            for lc in SurveyLinkedContact.objects.filter(
-                response_id__in=response_ids,
-            ).values("response_id", "email")
-        }
-        rows = [
-            {
-                "respondent_id": str(r["id"]),
-                "email": emails.get(str(r["id"]), ""),
-                "answers": r["answers"],
-            }
-            for r in collected
-        ]
-    else:
-        rows = [
-            {
-                "respondent_id": str(r["id"]),
-                "answers": r["answers"],
-            }
-            for r in collected
-        ]
+    rows = [{"respondent_id": str(r["id"]), "answers": r["answers"]} for r in collected]
 
     return {
         "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],

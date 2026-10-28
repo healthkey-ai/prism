@@ -51,67 +51,33 @@ it('loads selections and shows the paired count and crosstab', async () => {
   await waitFor(() => expect(client.fetchSurveyCrosstab).toHaveBeenCalledWith('survey-1', 'a', 'b', false))
 })
 
-describe('downloadResponsesCSV', () => {
-  it('includes Email column when view-contacts permission is granted', async () => {
-    const user = userEvent.setup()
-    vi.mocked(client.fetchSurveyResponses).mockResolvedValue({
-      total_responses: 1, include_partial: false,
-      questions: [{ key: 'q1', text: 'Treatment?', type: 'single', n: 1, options: [{ label: 'BR', count: 1, pct: 100 }] }],
-    })
-    vi.mocked(client.fetchSurveyResponsesExport).mockResolvedValue({
-      questions: [{ key: 'q1', text: 'Treatment?' }],
-      rows: [{ respondent_id: 'r1', email: 'alice@example.com', answers: { q1: 'BR' } }],
-      truncated: false,
-    })
-    const createObjectURL = vi.fn(() => 'blob:test')
-    const revokeObjectURL = vi.fn()
-    URL.createObjectURL = createObjectURL
-    URL.revokeObjectURL = revokeObjectURL
-
-    render(<Surveys />)
-    await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
-    const btn = await screen.findByRole('button', { name: 'Download survey responses CSV' })
-    await user.click(btn)
-
-    await waitFor(() => expect(client.fetchSurveyResponsesExport).toHaveBeenCalledWith('survey-1', false, true))
-    expect(createObjectURL).toHaveBeenCalledOnce()
-    const blob: Blob = createObjectURL.mock.calls[0][0]
-    const text = await readBlob(blob)
-    expect(text).toContain('"Email"')
-    expect(text).toContain('alice@example.com')
+it('downloads responses CSV with Respondent ID column and no Email column', async () => {
+  const user = userEvent.setup()
+  vi.mocked(client.fetchSurveyResponses).mockResolvedValue({
+    total_responses: 1, include_partial: false,
+    questions: [{ key: 'q1', text: 'Treatment?', type: 'single', n: 1, options: [{ label: 'BR', count: 1, pct: 100 }] }],
   })
-
-  it('omits Email column and does not crash when server returns 403', async () => {
-    const user = userEvent.setup()
-    vi.mocked(client.fetchSurveyResponses).mockResolvedValue({
-      total_responses: 1, include_partial: false,
-      questions: [{ key: 'q1', text: 'Treatment?', type: 'single', n: 1, options: [{ label: 'BR', count: 1, pct: 100 }] }],
-    })
-    // First call (include_email=true) rejects with 403; second succeeds without email.
-    vi.mocked(client.fetchSurveyResponsesExport)
-      .mockRejectedValueOnce(Object.assign(new Error('403'), { response: { status: 403 } }))
-      .mockResolvedValueOnce({
-        questions: [{ key: 'q1', text: 'Treatment?' }],
-        rows: [{ respondent_id: 'r1', answers: { q1: 'BR' } }],
-        truncated: false,
-      })
-    const createObjectURL = vi.fn(() => 'blob:test')
-    URL.createObjectURL = createObjectURL
-    URL.revokeObjectURL = vi.fn()
-
-    render(<Surveys />)
-    await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
-    const btn = await screen.findByRole('button', { name: 'Download survey responses CSV' })
-    await user.click(btn)
-
-    await waitFor(() => expect(createObjectURL).toHaveBeenCalledOnce())
-    const blob: Blob = createObjectURL.mock.calls[0][0]
-    const text = await readBlob(blob)
-    expect(text).not.toContain('"Email"')
-    expect(text).toContain('"Respondent ID"')
-    expect(text).toContain('BR')
-    expect(screen.queryByRole('alert')).toBeNull()
+  vi.mocked(client.fetchSurveyResponsesExport).mockResolvedValue({
+    questions: [{ key: 'q1', text: 'Treatment?' }],
+    rows: [{ respondent_id: 'r1', answers: { q1: 'BR' } }],
+    truncated: false,
   })
+  const createObjectURL = vi.fn(() => 'blob:test')
+  URL.createObjectURL = createObjectURL
+  URL.revokeObjectURL = vi.fn()
+
+  render(<Surveys />)
+  await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
+  const btn = await screen.findByRole('button', { name: 'Download survey responses CSV' })
+  await user.click(btn)
+
+  await waitFor(() => expect(client.fetchSurveyResponsesExport).toHaveBeenCalledWith('survey-1', false))
+  expect(createObjectURL).toHaveBeenCalledOnce()
+  const blob: Blob = createObjectURL.mock.calls[0][0]
+  const text = await readBlob(blob)
+  expect(text).toContain('"Respondent ID"')
+  expect(text).not.toContain('"Email"')
+  expect(text).toContain('BR')
 })
 
 it('uses a mean and SD chart when a selected answer is numeric', async () => {
