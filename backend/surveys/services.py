@@ -7,7 +7,7 @@ from collections import Counter
 from django.db.models import Count, Prefetch, Q
 
 from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
-from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse, SurveyVersion
+from .models import Survey, SurveyAnswer, SurveyOption, SurveyQuestion, SurveyResponse
 
 
 CHOICE_TYPES = {"single", "dropdown", "multi", "scale", "matrix", "ranking", "number", "date"}
@@ -84,21 +84,33 @@ def question_catalog(survey, include_partial=False):
 def _def_label(localized, lang):
     """Resolve a localized {lang: text} dict or plain string to text."""
     if isinstance(localized, dict):
-        return localized.get(lang) or next(iter(localized.values()), None)
+        val = localized.get(lang)
+        if val is not None:
+            return val if val else None
+        return next((v for v in localized.values() if v), None)
     if isinstance(localized, str):
-        return localized
+        return localized if localized else None
     return None
 
 
-def _def_option_labels(definition, question_key):
+def _parse_definition(version_def):
     """
-    Build option key→label dict from the version definition, resolving options_from.
-    Returns {} when the definition doesn't apply so the projection is used as-is.
+    Parse a version definition JSON into (lang, by_key) for use by the label helpers.
+    Returns ("en", {}) when the definition is absent or malformed.
+    Callers should build this once and pass the result to each helper.
     """
-    if not definition:
-        return {}
-    lang = definition.get("default_language", "en")
-    by_key = {q["key"]: q for q in definition.get("questions", [])}
+    if not version_def:
+        return "en", {}
+    lang = version_def.get("default_language", "en") or "en"
+    by_key = {q["key"]: q for q in version_def.get("questions", []) if "key" in q}
+    return lang, by_key
+
+
+def _def_option_labels(by_key, question_key, lang):
+    """
+    Build option key→label dict from a pre-parsed definition, resolving options_from.
+    Returns {} when the definition doesn't cover this question.
+    """
     qdef = by_key.get(question_key)
     if not qdef:
         return {}
@@ -109,24 +121,20 @@ def _def_option_labels(definition, question_key):
         if source:
             for opt in source.get("options", []):
                 lbl = _def_label(opt.get("label"), lang)
-                if lbl:
+                if lbl and "key" in opt:
                     result[opt["key"]] = lbl
     for opt in qdef.get("options", []):
         lbl = _def_label(opt.get("label"), lang)
-        if lbl:
+        if lbl and "key" in opt:
             result[opt["key"]] = lbl
     return result
 
 
-def _def_row_labels(definition, question_key):
+def _def_row_labels(by_key, question_key, lang):
     """
-    Build matrix row key→label dict from the version definition, resolving rows_from.
-    Returns {} when the definition doesn't apply so the rows related manager is used.
+    Build matrix row key→label dict from a pre-parsed definition, resolving rows_from.
+    Returns {} when the definition doesn't cover this question.
     """
-    if not definition:
-        return {}
-    lang = definition.get("default_language", "en")
-    by_key = {q["key"]: q for q in definition.get("questions", [])}
     qdef = by_key.get(question_key)
     if not qdef:
         return {}
@@ -138,24 +146,20 @@ def _def_row_labels(definition, question_key):
         if source:
             for opt in source.get("options", []):
                 lbl = _def_label(opt.get("label"), lang)
-                if lbl:
+                if lbl and "key" in opt:
                     result[opt["key"]] = lbl
     for row in config.get("rows", []):
         lbl = _def_label(row.get("label"), lang)
-        if lbl:
+        if lbl and "key" in row:
             result[row["key"]] = lbl
     return result
 
 
-def _def_scale_label(definition, question_key, answer):
+def _def_scale_label(by_key, question_key, answer, lang):
     """
-    Resolve a matrix scale-point answer (int or 'na') to a label from the definition.
+    Resolve a matrix scale-point answer (int or 'na') to a label from a pre-parsed definition.
     Returns None when the definition has no scale info so the raw value is used.
     """
-    if not definition:
-        return None
-    lang = definition.get("default_language", "en")
-    by_key = {q["key"]: q for q in definition.get("questions", [])}
     qdef = by_key.get(question_key)
     if not qdef:
         return None
@@ -169,9 +173,10 @@ def _def_scale_label(definition, question_key, answer):
         int_val = int(answer)
     except (TypeError, ValueError):
         return None
-    min_val = scale.get("min", 1)
+    # Cast to int — JSON floats (e.g. 1.0) would otherwise make list indexing fail.
+    min_val = int(scale.get("min", 1))
     point_labels = scale.get("point_labels")
-    if point_labels:
+    if isinstance(point_labels, list):
         idx = int_val - min_val
         if 0 <= idx < len(point_labels):
             lbl = _def_label(point_labels[idx], lang)
@@ -180,7 +185,8 @@ def _def_scale_label(definition, question_key, answer):
     if int_val == min_val:
         lbl = scale.get("min_label")
         return _def_label(lbl, lang) if lbl is not None else None
-    max_val = scale.get("max")
+    raw_max = scale.get("max")
+    max_val = int(raw_max) if raw_max is not None else None
     if max_val is not None and int_val == max_val:
         lbl = scale.get("max_label")
         return _def_label(lbl, lang) if lbl is not None else None
@@ -190,11 +196,13 @@ def _def_scale_label(definition, question_key, answer):
 def _labels(question, value, version_def=None):
     if not isinstance(value, dict) or value.get("skipped"):
         return []
+    # Parse definition once — shared by all three helpers to avoid repeated dict builds.
+    def_lang, def_by_key = _parse_definition(version_def)
     # Build option labels from the projection, then augment/override with
     # definition-sourced labels (resolves options_from references).
     option_labels = {o.key: o.label for o in question.options.all()}
-    if version_def:
-        def_opts = _def_option_labels(version_def, question.key)
+    if def_by_key:
+        def_opts = _def_option_labels(def_by_key, question.key, def_lang)
         if def_opts:
             option_labels = {**option_labels, **def_opts}
     selected = value.get("options") if question.type == "multi" else [value.get("option")]
@@ -209,15 +217,15 @@ def _labels(question, value, version_def=None):
         # Column (answer) labels for scale matrices come from config.scale in the
         # definition; for option matrices the projection is used as usual.
         ratings = value.get("ratings") or {}
-        row_labels = _def_row_labels(version_def, question.key) if version_def else {}
+        row_labels = _def_row_labels(def_by_key, question.key, def_lang) if def_by_key else {}
         if not row_labels:
             rows_attr = getattr(question, "rows", None)
             if rows_attr is not None and callable(getattr(rows_attr, "all", None)):
                 row_labels = {r.key: r.label for r in rows_attr.all()}
 
         def _col_label(answer):
-            if version_def:
-                scale_lbl = _def_scale_label(version_def, question.key, answer)
+            if def_by_key:
+                scale_lbl = _def_scale_label(def_by_key, question.key, answer, def_lang)
                 if scale_lbl is not None:
                     return scale_lbl
             return option_labels.get(answer, str(answer))
