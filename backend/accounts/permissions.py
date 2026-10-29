@@ -2,6 +2,19 @@ from rest_framework.permissions import BasePermission
 from .utils import has_org_admin_access
 
 
+class CanViewContacts(BasePermission):
+    """Allow access only to staff users who hold the surveys.view_contacts permission."""
+    message = "Contact viewing permission required."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return bool(
+            request.user.is_staff
+            and request.user.has_perm("surveys.view_contacts")
+        )
+
+
 class IsPremiumOrStaff(BasePermission):
     """Allow access only to users with Premium access or staff status.
 

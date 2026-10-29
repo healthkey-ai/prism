@@ -18,13 +18,23 @@ export interface SurveyCrosstab {
   }[]
 }
 
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/)
+// The CSRF cookie's name. Configurable at build time because PRism may share a
+// host with another Django app that sets its own `csrftoken`; the backend's
+// CSRF_COOKIE_NAME must match.
+const CSRF_COOKIE_NAME: string = import.meta.env.VITE_CSRF_COOKIE_NAME || 'csrftoken'
+
+// Anchored to a cookie boundary, so `csrftoken` never matches the tail of
+// another cookie's name (e.g. `prism_csrftoken`), and vice versa.
+export function getCsrfToken(cookie: string = document.cookie, name: string = CSRF_COOKIE_NAME): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`))
   return match ? match[1] : ''
 }
 
+// BASE_URL is Vite's `base`: '/' normally, '/analytics/' when PRism is served
+// under a path prefix (see vite.config.ts). It always ends with '/'.
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${import.meta.env.BASE_URL}api`,
   withCredentials: true,
 })
 
@@ -51,7 +61,7 @@ api.interceptors.response.use(
   }
 )
 
-function toParams(filters: CohortFilters): URLSearchParams {
+export function toParams(filters: CohortFilters): URLSearchParams {
   const p = new URLSearchParams()
   for (const [key, val] of Object.entries(filters)) {
     if (val === undefined || val === null || val === '') continue
@@ -86,10 +96,37 @@ export async function fetchSurveyQuestions(id: string): Promise<SurveyQuestion[]
   return data
 }
 
-export async function fetchSurveyCrosstab(id: string, x: string, y: string, includePartial = false): Promise<SurveyCrosstab> {
-  const params = new URLSearchParams({ x, y })
+export async function fetchSurveyCrosstab(id: string, x: string, y: string, includePartial = false, filters?: CohortFilters): Promise<SurveyCrosstab> {
+  const params = filters ? toParams(filters) : new URLSearchParams()
+  params.set('x', x)
+  params.set('y', y)
   if (includePartial) params.set('include_partial', 'true')
   const { data } = await api.get<SurveyCrosstab>(`/surveys/${id}/crosstab/?${params}`)
+  return data
+}
+
+export interface SurveyResponseOption { label: string; count: number; pct: number }
+export interface SurveyResponseQuestion { key: string; text: string; n: number; options: SurveyResponseOption[] }
+export interface SurveyResponsesData { total_responses: number; include_partial: boolean; questions: SurveyResponseQuestion[] }
+
+export async function fetchSurveyResponses(id: string, includePartial = false, filters?: CohortFilters): Promise<SurveyResponsesData> {
+  const params = filters ? toParams(filters) : new URLSearchParams()
+  if (includePartial) params.set('include_partial', 'true')
+  const { data } = await api.get<SurveyResponsesData>(`/surveys/${id}/responses/?${params}`)
+  return data
+}
+
+export interface SurveyResponseExportRow { respondent_id: string; answers: Record<string, string> }
+export interface SurveyResponseExport {
+  questions: { key: string; text: string }[]
+  rows: SurveyResponseExportRow[]
+  truncated: boolean
+}
+
+export async function fetchSurveyResponsesExport(id: string, includePartial = false, filters?: CohortFilters): Promise<SurveyResponseExport> {
+  const params = filters ? toParams(filters) : new URLSearchParams()
+  if (includePartial) params.set('include_partial', 'true')
+  const { data } = await api.get<SurveyResponseExport>(`/surveys/${id}/responses/export/?${params}`)
   return data
 }
 

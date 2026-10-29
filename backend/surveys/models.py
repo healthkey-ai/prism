@@ -16,6 +16,7 @@ class SurveyVersion(models.Model):
     survey = models.ForeignKey(Survey, on_delete=models.DO_NOTHING, related_name="versions")
     version = models.CharField(max_length=32)
     created_at = models.DateTimeField()
+    definition = models.JSONField(null=True)
 
     class Meta:
         managed = False
@@ -64,3 +65,20 @@ class SurveyAnswer(models.Model):
     class Meta:
         managed = False
         db_table = "prolog_surveys_surveyanswer"
+
+
+class SurveyLinkedContact(models.Model):
+    """Optional email contact a respondent provided when submitting their survey."""
+    response = models.OneToOneField(
+        SurveyResponse, on_delete=models.DO_NOTHING, related_name="linked_contact",
+        db_column="response_id",
+    )
+    email = models.CharField(max_length=254)
+    # Mirrored from PROMOP once healthkey-ai/promop#2084 adds the column.
+    # Until then, filtering on this field raises ProgrammingError which is
+    # caught by _cohort_response_ids() in views.py to degrade gracefully.
+    patient_id = models.UUIDField(null=True, db_column="patient_id")
+
+    class Meta:
+        managed = False
+        db_table = "prolog_surveys_surveylinkedcontact"

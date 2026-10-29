@@ -62,12 +62,14 @@ def survey_catalog():
     return [{"id": str(s.pk), "title": s.title, "completions": s.completions} for s in surveys]
 
 
-def question_catalog(survey):
+def question_catalog(survey, include_partial=False):
     # Prefer the most recent question wording; a response is still interpreted
     # using the question and options belonging to its own instrument version.
+    qs_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        qs_filter["survey_version__responses__status"] = "submitted"
     questions = SurveyQuestion.objects.filter(
-        survey_version__survey=survey,
-        survey_version__responses__status="submitted",
+        **qs_filter,
     ).select_related("survey_version").order_by("-survey_version__created_at", "order").distinct()
     seen = set()
     result = []
@@ -79,10 +81,130 @@ def question_catalog(survey):
     return result
 
 
-def _labels(question, value):
+def _def_label(localized, lang):
+    """Resolve a localized {lang: text} dict or plain string to text."""
+    if isinstance(localized, dict):
+        val = localized.get(lang)
+        if val is not None:
+            return val if val else None
+        return next((v for v in localized.values() if v), None)
+    if isinstance(localized, str):
+        return localized if localized else None
+    return None
+
+
+def _parse_definition(version_def):
+    """
+    Parse a version definition JSON into (lang, by_key) for use by the label helpers.
+    Returns ("en", {}) when the definition is absent or malformed.
+    Callers should build this once and pass the result to each helper.
+    """
+    if not version_def:
+        return "en", {}
+    lang = version_def.get("default_language", "en") or "en"
+    by_key = {q["key"]: q for q in version_def.get("questions", []) if "key" in q}
+    return lang, by_key
+
+
+def _def_option_labels(by_key, question_key, lang):
+    """
+    Build option key→label dict from a pre-parsed definition, resolving options_from.
+    Returns {} when the definition doesn't cover this question.
+    """
+    qdef = by_key.get(question_key)
+    if not qdef:
+        return {}
+    result = {}
+    source_key = (qdef.get("config") or {}).get("options_from")
+    if source_key:
+        source = by_key.get(source_key)
+        if source:
+            for opt in source.get("options", []):
+                lbl = _def_label(opt.get("label"), lang)
+                if lbl and "key" in opt:
+                    result[opt["key"]] = lbl
+    for opt in qdef.get("options", []):
+        lbl = _def_label(opt.get("label"), lang)
+        if lbl and "key" in opt:
+            result[opt["key"]] = lbl
+    return result
+
+
+def _def_row_labels(by_key, question_key, lang):
+    """
+    Build matrix row key→label dict from a pre-parsed definition, resolving rows_from.
+    Returns {} when the definition doesn't cover this question.
+    """
+    qdef = by_key.get(question_key)
+    if not qdef:
+        return {}
+    config = qdef.get("config") or {}
+    result = {}
+    rows_from_key = config.get("rows_from")
+    if rows_from_key:
+        source = by_key.get(rows_from_key)
+        if source:
+            for opt in source.get("options", []):
+                lbl = _def_label(opt.get("label"), lang)
+                if lbl and "key" in opt:
+                    result[opt["key"]] = lbl
+    for row in config.get("rows", []):
+        lbl = _def_label(row.get("label"), lang)
+        if lbl and "key" in row:
+            result[row["key"]] = lbl
+    return result
+
+
+def _def_scale_label(by_key, question_key, answer, lang):
+    """
+    Resolve a matrix scale-point answer (int or 'na') to a label from a pre-parsed definition.
+    Returns None when the definition has no scale info so the raw value is used.
+    """
+    qdef = by_key.get(question_key)
+    if not qdef:
+        return None
+    scale = (qdef.get("config") or {}).get("scale") or {}
+    if not scale:
+        return None
+    if answer == "na":
+        na = scale.get("not_applicable")
+        return _def_label(na, lang) if na is not None else None
+    try:
+        int_val = int(answer)
+    except (TypeError, ValueError):
+        return None
+    # Cast to int — JSON floats (e.g. 1.0) would otherwise make list indexing fail.
+    min_val = int(scale.get("min", 1))
+    point_labels = scale.get("point_labels")
+    if isinstance(point_labels, list):
+        idx = int_val - min_val
+        if 0 <= idx < len(point_labels):
+            lbl = _def_label(point_labels[idx], lang)
+            if lbl:
+                return lbl
+    if int_val == min_val:
+        lbl = scale.get("min_label")
+        return _def_label(lbl, lang) if lbl is not None else None
+    raw_max = scale.get("max")
+    max_val = int(raw_max) if raw_max is not None else None
+    if max_val is not None and int_val == max_val:
+        lbl = scale.get("max_label")
+        return _def_label(lbl, lang) if lbl is not None else None
+    return None
+
+
+def _labels(question, value, version_def=None):
     if not isinstance(value, dict) or value.get("skipped"):
         return []
+    # Parse definition once — shared by all three helpers to avoid repeated dict builds.
+    def_lang, def_by_key = _parse_definition(version_def)
+    # Build option labels from the projection, then augment/override with
+    # definition-sourced labels (resolves options_from references).
     option_labels = {o.key: o.label for o in question.options.all()}
+    if def_by_key:
+        def_opts = _def_option_labels(def_by_key, question.key, def_lang)
+        if def_opts:
+            option_labels = {**option_labels, **def_opts}
     selected = value.get("options") if question.type == "multi" else [value.get("option")]
     if question.type == "scale":
         selected = [value.get("value")]
@@ -90,7 +212,28 @@ def _labels(question, value):
         selected = [value.get(question.type)]
     if question.type == "matrix":
         # A matrix has several row values, each a separate categorical answer.
-        selected = [f"{row}: {answer}" for row, answer in (value.get("ratings") or {}).items()]
+        # Row labels come from the version definition (config.rows / rows_from),
+        # falling back to the rows related manager if the definition has none.
+        # Column (answer) labels for scale matrices come from config.scale in the
+        # definition; for option matrices the projection is used as usual.
+        ratings = value.get("ratings") or {}
+        row_labels = _def_row_labels(def_by_key, question.key, def_lang) if def_by_key else {}
+        if not row_labels:
+            rows_attr = getattr(question, "rows", None)
+            if rows_attr is not None and callable(getattr(rows_attr, "all", None)):
+                row_labels = {r.key: r.label for r in rows_attr.all()}
+
+        def _col_label(answer):
+            if def_by_key:
+                scale_lbl = _def_scale_label(def_by_key, question.key, answer, def_lang)
+                if scale_lbl is not None:
+                    return scale_lbl
+            return option_labels.get(answer, str(answer))
+
+        selected = [
+            f"{row_labels.get(row, row)}: {_col_label(answer)}"
+            for row, answer in ratings.items()
+        ]
     if question.type == "ranking":
         return [f"{position}: {option_labels.get(key, key)}" for position, key in
                 enumerate(value.get("order") or [], start=1)]
@@ -140,15 +283,127 @@ def _summaries(samples):
     ]
 
 
-def crosstab(survey, x_key, y_key, include_partial=False):
-    catalog = {q["key"]: q for q in question_catalog(survey)}
+def question_responses(survey, include_partial=False, response_ids=None):
+    """Per-question marginal option counts for all eligible categorical questions."""
+    catalog = question_catalog(survey, include_partial=include_partial)
+    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    keys = [q["key"] for q in categorical]
+
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
+    if response_ids is not None:
+        response_filter["id__in"] = response_ids
+
+    total_responses = SurveyResponse.objects.filter(**response_filter).count()
+
+    questions_qs = SurveyQuestion.objects.filter(
+        survey_version__survey=survey, key__in=keys
+    ).select_related("survey_version").prefetch_related(
+        Prefetch("options", queryset=SurveyOption.objects.order_by("order"))
+    )
+    by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+    catalog_by_key = {q["key"]: q for q in categorical}
+
+    option_counts = {key: Counter() for key in keys}
+    respondent_counts = {key: 0 for key in keys}
+
+    responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
+        Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
+    )
+    for response in responses.iterator(chunk_size=500):
+        answers = {a.question_key: a.value for a in response.answers.all()}
+        for key in keys:
+            q = by_version.get((response.survey_version_id, key))
+            if not q or q.type != catalog_by_key[key]["type"]:
+                continue
+            version_def = q.survey_version.definition
+            labels = _labels(q, answers.get(key), version_def=version_def)
+            if labels:
+                respondent_counts[key] += 1
+                for label in labels:
+                    option_counts[key][label] += 1
+
+    result_questions = []
+    for q_info in categorical:
+        key = q_info["key"]
+        n = respondent_counts[key]
+        if n == 0:
+            continue
+        opts = [
+            {"label": label, "count": count, "pct": round(count / n * 100, 1)}
+            for label, count in sorted(option_counts[key].items(), key=lambda x: -x[1])
+        ]
+        result_questions.append({"key": key, "text": q_info["text"], "n": n, "options": opts})
+
+    return {
+        "total_responses": total_responses,
+        "include_partial": include_partial,
+        "questions": result_questions,
+    }
+
+
+def response_export(survey, include_partial=False, response_ids=None):
+    """Return de-identified per-response answer data for CSV export."""
+    catalog = question_catalog(survey, include_partial=include_partial)
+    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    keys = [q["key"] for q in categorical]
+    catalog_by_key = {q["key"]: q for q in categorical}
+
+    response_filter = {"survey_version__survey": survey}
+    if not include_partial:
+        response_filter["status"] = "submitted"
+    if response_ids is not None:
+        response_filter["id__in"] = response_ids
+
+    questions_qs = SurveyQuestion.objects.filter(
+        survey_version__survey=survey, key__in=keys
+    ).select_related("survey_version").prefetch_related(
+        Prefetch("options", queryset=SurveyOption.objects.order_by("order"))
+    )
+    by_version = {(q.survey_version_id, q.key): q for q in questions_qs if eligible(q)}
+
+    responses = SurveyResponse.objects.filter(**response_filter).prefetch_related(
+        Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
+    )
+    MAX_EXPORT_ROWS = 10_000
+    collected = []
+    truncated = False
+    for response in responses.iterator(chunk_size=500):
+        if len(collected) >= MAX_EXPORT_ROWS:
+            truncated = True
+            break
+        answers = {a.question_key: a.value for a in response.answers.all()}
+        row = {}
+        for key in keys:
+            q = by_version.get((response.survey_version_id, key))
+            if not q or q.type != catalog_by_key[key]["type"]:
+                continue
+            version_def = q.survey_version.definition
+            labels = _labels(q, answers.get(key), version_def=version_def)
+            row[key] = "; ".join(labels) if labels else ""
+        collected.append({"id": response.id, "answers": row})
+
+    rows = [{"respondent_id": str(r["id"]), "answers": r["answers"]} for r in collected]
+
+    return {
+        "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],
+        "rows": rows,
+        "truncated": truncated,
+    }
+
+
+def crosstab(survey, x_key, y_key, include_partial=False, response_ids=None):
+    catalog = {q["key"]: q for q in question_catalog(survey, include_partial=include_partial)}
     x_info = catalog.get(x_key, {})
     y_info = catalog.get(y_key, {})
     x_numeric = _is_numeric(x_info.get("type"), x_key, x_info.get("text", ""))
     y_numeric = _is_numeric(y_info.get("type"), y_key, y_info.get("text", ""))
     questions = SurveyQuestion.objects.filter(
         survey_version__survey=survey, key__in=[x_key, y_key]
-    ).prefetch_related(Prefetch("options", queryset=SurveyOption.objects.order_by("order")))
+    ).select_related("survey_version").prefetch_related(
+        Prefetch("options", queryset=SurveyOption.objects.order_by("order"))
+    )
     by_version = {(q.survey_version_id, q.key): q for q in questions if eligible(q)}
     counts = Counter()
     x_option_counts: Counter = Counter()
@@ -161,6 +416,8 @@ def crosstab(survey, x_key, y_key, include_partial=False):
     response_filter = {"survey_version__survey": survey}
     if not include_partial:
         response_filter["status"] = "submitted"
+    if response_ids is not None:
+        response_filter["id__in"] = response_ids
     responses = SurveyResponse.objects.filter(
         **response_filter
     ).prefetch_related(Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=[x_key, y_key])))
@@ -172,11 +429,13 @@ def crosstab(survey, x_key, y_key, include_partial=False):
             continue
         x_number = _numeric_value(xq, answers.get(x_key)) if x_numeric else None
         y_number = _numeric_value(yq, answers.get(y_key)) if y_numeric else None
+        x_def = xq.survey_version.definition
+        y_def = yq.survey_version.definition
         xs = ["All paired responses"] if x_numeric and x_number is not None else (
-            _labels(xq, answers.get(x_key)) if not x_numeric else []
+            _labels(xq, answers.get(x_key), version_def=x_def) if not x_numeric else []
         )
         ys = ["All paired responses"] if y_numeric and y_number is not None else (
-            _labels(yq, answers.get(y_key)) if not y_numeric else []
+            _labels(yq, answers.get(y_key), version_def=y_def) if not y_numeric else []
         )
         if xs:
             x_n += 1
