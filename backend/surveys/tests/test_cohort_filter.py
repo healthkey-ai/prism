@@ -170,6 +170,27 @@ def test_cohort_response_ids_graceful_on_db_error(survey_tables):
     assert result is None
 
 
+@pytest.mark.django_db
+def test_cohort_response_ids_no_linkages_returns_none(survey_tables):
+    """patient_id column exists but no rows have a non-null patient_id → None (show all).
+
+    This is the FLF case: patient_id column is in the schema but linkage hasn't
+    been populated yet.  Returning None degrades gracefully to all responses
+    rather than silently returning an empty result set.
+    """
+    from surveys.views import _cohort_response_ids
+    # Create a SurveyLinkedContact with no patient_id (null)
+    survey, version, _ = _make_survey("no-linkage")
+    r = _submit(version, {"option": "us"})
+    SurveyLinkedContact.objects.create(response=r, email="test@example.com")
+
+    request = MagicMock()
+    request.query_params = {"disease": "Follicular Lymphoma"}
+    result = _cohort_response_ids(request)
+
+    assert result is None
+
+
 # ---------------------------------------------------------------------------
 # View integration: no cohort params → 200 with all responses
 # ---------------------------------------------------------------------------

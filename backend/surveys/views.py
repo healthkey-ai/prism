@@ -18,9 +18,12 @@ def _cohort_response_ids(request):
     - No cohort filter params are present in the request (show all responses).
     - The patient_id column is not yet in the DB (graceful degradation until
       healthkey-ai/promop#2084 adds it to prolog_surveys_surveylinkedcontact).
+    - The patient_id column exists but has no data yet (linkage not yet
+      populated — degrade gracefully rather than returning an empty result).
 
-    When the schema is in place, returns a (possibly empty) set of UUIDs so
-    that callers can restrict their response queryset to cohort members.
+    When the schema is in place and linkages exist, returns a (possibly empty)
+    set of UUIDs so that callers can restrict their response queryset to cohort
+    members.
     """
     cohort_params = {k for k in request.query_params if k not in _SURVEY_PARAMS}
     if not cohort_params:
@@ -33,6 +36,14 @@ def _cohort_response_ids(request):
             from accounts.utils import apply_org_scope
             from cohorts.filters import apply_cohort_filters
             from patients.models import PatientInfo
+
+            # If no patient_id linkages exist at all, the feature is not yet
+            # populated for this deployment — fall back to all responses.
+            if not SurveyLinkedContact.objects.filter(
+                patient_id__isnull=False
+            ).exists():
+                return None
+
             base_qs, _ = apply_org_scope(PatientInfo.objects.all(), request.user)
             filtered_qs = apply_cohort_filters(request, qs=base_qs)
             patient_ids = list(filtered_qs.values_list("id", flat=True))
