@@ -255,6 +255,12 @@ def test_cohort_ignored_when_responses_cannot_be_linked(survey_tables):
 def test_empty_cohort_with_patient_link_returns_no_responses(survey_tables):
     """With the link in place, an empty cohort really does mean no responses."""
     from surveys.views import _cohort_response_ids
+    # Linkage is populated: one respondent is linked to a patient, who is not in
+    # the cohort. Without a linked row, the no-linkage fallback returns None.
+    _, version, _ = _make_survey("linked-empty-cohort")
+    linked = _submit(version, {"option": "us"})
+    SurveyLinkedContact.objects.create(response=linked, email="x@example.com", patient_id=uuid.uuid4())
+
     request = MagicMock()
     request.query_params = {"disease": "Some Disease"}
     with patch("surveys.views._patient_link_available", return_value=True), \
