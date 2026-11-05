@@ -29,6 +29,8 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
   }, [data.cells])
   const xOptionCounts = data.x_option_counts
   const yOptionCounts = data.y_option_counts
+  const xName = (value: string) => data.x_titles?.[value] ?? value
+  const yName = (value: string) => data.y_titles?.[value] ?? value
 
   return <figure aria-label="Crosstabulation heatmap" className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
     <div className="flex gap-3">
@@ -45,7 +47,7 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
               const yPct = yCount != null && data.y_n ? Math.round(yCount / data.y_n * 100 * 10) / 10 : null
               return <div key={row} className="contents">
               <div className="flex flex-col items-end justify-center pr-3 text-right">
-                <span className="text-xs font-medium text-slate-700">{row}</span>
+                <span className="text-xs font-medium text-slate-700" title={yName(row)}>{row}</span>
                 {yCount != null && (
                   <span className="text-[11px] text-slate-500 tabular-nums">{yCount} ({yPct}%)</span>
                 )}
@@ -56,8 +58,8 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
                 return <div
                   key={`${row}:${column}`}
                   role="img"
-                  aria-label={`${row} with ${column}: ${cell.count} respondents (${cell.pct}%)`}
-                  title={`${row} × ${column}: ${cell.count} respondents (${cell.pct}%)`}
+                  aria-label={`${yName(row)} with ${xName(column)}: ${cell.count} respondents (${cell.pct}%)`}
+                  title={`${yName(row)} × ${xName(column)}: ${cell.count} respondents (${cell.pct}%)`}
                   className="flex h-16 flex-col items-center justify-center rounded-md tabular-nums transition-transform hover:scale-[1.04]"
                   style={{ backgroundColor: color, color: cell.count / (maximum || 1) > 0.6 ? '#ffffff' : '#134e4a' }}
                 >
@@ -70,7 +72,7 @@ export default function CrosstabHeatmap({ data, xQuestion, yQuestion }: Props) {
             {data.x_values.map(column => {
               const xCount = xOptionCounts?.[column]
               const xPct = xCount != null && data.x_n ? Math.round(xCount / data.x_n * 100 * 10) / 10 : null
-              return <div key={column} className="pt-2 text-center text-xs font-medium leading-tight text-slate-700">
+              return <div key={column} className="pt-2 text-center text-xs font-medium leading-tight text-slate-700" title={xName(column)}>
                 {column}
                 {xCount != null && (
                   <div className="text-[11px] text-slate-500 tabular-nums">{xCount} ({xPct}%)</div>

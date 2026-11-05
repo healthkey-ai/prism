@@ -69,3 +69,59 @@ it('encodes max-count option with darkest color', () => {
   const brCell = screen.getByRole('img', { name: /Which treatments have you had\? — BR: 5 \(62\.5%\)/ })
   expect(brCell).toHaveStyle({ backgroundColor: '#115e59' })
 })
+
+const numberedData: SurveyResponsesData = {
+  total_responses: 4,
+  include_partial: false,
+  questions: [
+    {
+      key: 'q1_country',
+      number: '1',
+      text: 'Which country do you live in?',
+      n: 3,
+      options: [
+        { label: 'GB', count: 2, pct: 66.7, title: 'United Kingdom' },
+        { label: 'US', count: 1, pct: 33.3, title: 'United States' },
+      ],
+      zero_options: ['France', 'Germany', 'Spain'],
+    },
+    {
+      key: 'q11_cart_informed',
+      number: '11',
+      text: 'How well informed do you feel about CAR-T therapy?',
+      n: 4,
+      options: [
+        { label: '1 – Not informed at all', count: 3, pct: 75 },
+        { label: '5 – Very well informed', count: 1, pct: 25 },
+      ],
+      zero_options: ['2', '3', '4'],
+    },
+  ],
+}
+
+it('prefixes the question number', () => {
+  render(<SurveyResponsesGrid data={numberedData} />)
+  expect(screen.getByText('Q1. Which country do you live in?')).toBeInTheDocument()
+  expect(screen.getByText('Q11. How well informed do you feel about CAR-T therapy?')).toBeInTheDocument()
+})
+
+it('shows the country code with the full name as the tooltip', () => {
+  render(<SurveyResponsesGrid data={numberedData} />)
+  expect(screen.getByText('GB')).toBeInTheDocument()
+  const cell = screen.getByRole('img', { name: /United Kingdom: 2 \(66\.7%\)/ })
+  expect(cell).toHaveAttribute('title', 'United Kingdom: 2 respondents (66.7%)')
+})
+
+it('adds a trailing zero cell listing every option with no responses', () => {
+  render(<SurveyResponsesGrid data={numberedData} />)
+  const zero = screen.getByRole('img', { name: /3 options with no responses: France, Germany, Spain/ })
+  expect(zero).toHaveAttribute('title', 'No responses (3): France, Germany, Spain')
+  expect(zero).toHaveTextContent('3 others')
+  expect(zero).toHaveTextContent('0')
+  expect(screen.getByRole('img', { name: /no responses: 2, 3, 4/ })).toBeInTheDocument()
+})
+
+it('omits the zero cell when the option set is not known', () => {
+  render(<SurveyResponsesGrid data={mockData} />)
+  expect(screen.queryByRole('img', { name: /no responses/ })).not.toBeInTheDocument()
+})
