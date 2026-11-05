@@ -54,3 +54,19 @@ it('shows per-option counts and percentages next to axis labels', () => {
   // Row label: Partial Response with 1/3 = 33.3%
   expect(screen.getByText('1 (33.3%)')).toBeInTheDocument()
 })
+
+it('shows full country names on hover for coded axis values', () => {
+  render(<CrosstabHeatmap
+    data={{
+      paired_completions: 2, x_n: 2, y_n: 2,
+      x_values: ['GB'], y_values: ['BR'],
+      cells: [{ x: 'GB', y: 'BR', count: 2, pct: 100 }],
+      x_titles: { GB: 'United Kingdom' },
+    }}
+    xQuestion="Q1. Which country do you live in?"
+    yQuestion="Q7. Treatments"
+  />)
+  expect(screen.getByText('GB')).toHaveAttribute('title', 'United Kingdom')
+  expect(screen.getByRole('img', { name: 'BR with United Kingdom: 2 respondents (100%)' }))
+    .toHaveAttribute('title', 'BR × United Kingdom: 2 respondents (100%)')
+})

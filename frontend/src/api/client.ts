@@ -2,7 +2,8 @@ import axios from 'axios'
 import type { CohortFilters, FormSettings, MetricsResponse, SavedCohort, User } from '../types'
 
 export interface SurveySummary { id: string; title: string; completions: number }
-export interface SurveyQuestion { key: string; text: string; type: string }
+/** `number` is the questionnaire number carried by the key (q7a_… → "7a"); null when the key has none. */
+export interface SurveyQuestion { key: string; number?: string | null; text: string; type: string }
 export interface SurveyCrosstab {
   paired_completions: number
   x_n?: number
@@ -12,6 +13,9 @@ export interface SurveyCrosstab {
   cells: { x: string; y: string; count: number; pct: number }[]
   x_option_counts?: Record<string, number>
   y_option_counts?: Record<string, number>
+  /** Full names for compact axis values (country code → country name). */
+  x_titles?: Record<string, string>
+  y_titles?: Record<string, string>
   numeric_summaries?: {
     axis: 'x' | 'y'
     groups: { label: string; n: number; mean: number; sd: number | null }[]
@@ -105,8 +109,17 @@ export async function fetchSurveyCrosstab(id: string, x: string, y: string, incl
   return data
 }
 
-export interface SurveyResponseOption { label: string; count: number; pct: number }
-export interface SurveyResponseQuestion { key: string; text: string; n: number; options: SurveyResponseOption[] }
+/** `title` is the full text behind a compact label (a country code's name), shown on hover. */
+export interface SurveyResponseOption { label: string; count: number; pct: number; title?: string }
+export interface SurveyResponseQuestion {
+  key: string
+  number?: string | null
+  text: string
+  n: number
+  options: SurveyResponseOption[]
+  /** Options the instrument offers that nobody chose (full names), when the option set is known. */
+  zero_options?: string[]
+}
 export interface SurveyResponsesData { total_responses: number; include_partial: boolean; questions: SurveyResponseQuestion[] }
 
 export async function fetchSurveyResponses(id: string, includePartial = false, filters?: CohortFilters): Promise<SurveyResponsesData> {
@@ -118,7 +131,7 @@ export async function fetchSurveyResponses(id: string, includePartial = false, f
 
 export interface SurveyResponseExportRow { respondent_id: string; answers: Record<string, string> }
 export interface SurveyResponseExport {
-  questions: { key: string; text: string }[]
+  questions: { key: string; number?: string | null; text: string }[]
   rows: SurveyResponseExportRow[]
   truncated: boolean
 }

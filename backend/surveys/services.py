@@ -2,8 +2,10 @@
 import re
 import math
 import statistics
+from functools import lru_cache
 from collections import Counter
 
+import pycountry
 from django.db.models import Count, Prefetch, Q
 
 from cohorts.views import FL_FIRST_LINE, FL_SECOND_LINE, FL_LATER_LINE
@@ -41,6 +43,30 @@ def map_fl_treatment(description):
         if normalized == re.sub(r"[^a-z0-9]+", " ", therapy.casefold()).strip():
             return therapy
     return ALIASES.get(normalized)
+
+
+QUESTION_NUMBER = re.compile(r"^q(\d+[a-z]?)(?:_|$)", re.I)
+ISO3166_SOURCE = "iso3166_countries"
+
+
+def question_number(key):
+    """The questionnaire number carried by a question key: q7a_recent_treatment -> "7a"."""
+    match = QUESTION_NUMBER.match(key or "")
+    return match.group(1).lower() if match else None
+
+
+@lru_cache(maxsize=1)
+def _country_names():
+    """ISO 3166-1 alpha-2 code -> English short name, as PROlog's built-in
+    iso3166_countries option source labels them."""
+    return {
+        c.alpha_2: getattr(c, "common_name", None) or c.name
+        for c in pycountry.countries
+    }
+
+
+def country_name(code):
+    return _country_names().get(str(code).upper()) if code is not None else None
 
 
 def eligible(question):
@@ -85,7 +111,12 @@ def question_catalog(survey, include_partial=False):
         if question.key in seen or not eligible(question):
             continue
         seen.add(question.key)
-        result.append({"key": question.key, "text": question.text, "type": question.type})
+        result.append({
+            "key": question.key,
+            "number": question_number(question.key),
+            "text": question.text,
+            "type": question.type,
+        })
     return result
 
 
@@ -177,6 +208,40 @@ def _def_row_labels(by_key, question_key, lang):
     return result
 
 
+def _def_options_source(by_key, question_key):
+    """The built-in option source a dropdown draws from (config.options_source), or None."""
+    qdef = by_key.get(question_key)
+    if not qdef:
+        return None
+    return (qdef.get("config") or {}).get("options_source")
+
+
+def _def_scale_points(by_key, question_key, lang):
+    """Every point of a scale question as (value, label), min..max, from the definition.
+    Empty when the definition has no scale config."""
+    qdef = by_key.get(question_key)
+    if not qdef:
+        return []
+    scale = (qdef.get("config") or {}).get("scale") or {}
+    if not scale:
+        return []
+    try:
+        min_val = int(scale.get("min", 1))
+        max_val = int(scale["max"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    return [(n, _scale_point_label(by_key, question_key, n, lang)) for n in range(min_val, max_val + 1)]
+
+
+def _scale_point_label(by_key, question_key, value, lang):
+    """Label for one scale answer: the number, with the end-point or point text
+    from the definition when there is one ("1 – Not informed at all")."""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    text = _def_scale_label(by_key, question_key, value, lang) if by_key else None
+    return f"{value} – {text}" if text else str(value)
+
+
 def _def_scale_label(by_key, question_key, answer, lang):
     """
     Resolve a matrix scale-point answer (int or 'na') to a label from a pre-parsed definition.
@@ -230,7 +295,10 @@ def _labels(question, value, version_def=None, parsed=None):
             option_labels = {**option_labels, **def_opts}
     selected = value.get("options") if question.type == "multi" else [value.get("option")]
     if question.type == "scale":
-        selected = [value.get("value")]
+        point = value.get("value")
+        if isinstance(point, bool) or not isinstance(point, (int, float)) or not math.isfinite(point):
+            return []
+        return [_scale_point_label(def_by_key, question.key, point, def_lang)]
     if question.type in {"number", "date"}:
         selected = [value.get(question.type)]
     if question.type == "matrix":
@@ -306,10 +374,50 @@ def _summaries(samples):
     ]
 
 
+def _tabulated(q):
+    """Questions the responses grid and export tabulate: every categorical
+    question, plus scale questions as a distribution over their points."""
+    return q["type"] == "scale" or not _is_numeric(q["type"], q["key"], q["text"])
+
+
+def _scale_sort_key(label):
+    match = re.match(r"^(-?\d+)", label)
+    return (0, int(match.group(1))) if match else (1, label)
+
+
+def _option_universe(q_info, key, by_version, definitions, counts):
+    """(titles, zero_options) for one tabulated question.
+
+    titles maps a compact label to the full text shown on hover (a country
+    code to its name); zero_options lists the full names of every option the
+    instrument offers that nobody chose. Both are empty unless the option set
+    is known in full: a scale's points, or a dropdown drawn from PROlog's ISO
+    3166 country list (honouring options_source_include)."""
+    titles = {}
+    universe = []
+    for (version_id, q_key), question in by_version.items():
+        if q_key != key:
+            continue
+        lang, by_key = definitions.get(version_id, ("en", {}))
+        if q_info["type"] == "scale":
+            universe.extend(label for _, label in _def_scale_points(by_key, key, lang))
+        elif _def_options_source(by_key, key) == ISO3166_SOURCE:
+            include = ((by_key.get(key) or {}).get("config") or {}).get("options_source_include")
+            names = _country_names()
+            codes = [c.upper() for c in include] if include else names
+            for code in codes:
+                if code in names:
+                    titles[code] = names[code]
+            universe.extend(sorted(titles.values()))
+    seen = {titles.get(label, label) for label in counts}
+    zero_options = [name for name in dict.fromkeys(universe) if name not in seen]
+    return titles, zero_options
+
+
 def question_responses(survey, include_partial=False, response_ids=None):
     """Per-question marginal option counts for all eligible categorical questions."""
     catalog = question_catalog(survey, include_partial=include_partial)
-    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    categorical = [q for q in catalog if _tabulated(q)]
     keys = [q["key"] for q in categorical]
 
     response_filter = {"survey_version__survey": survey}
@@ -353,11 +461,27 @@ def question_responses(survey, include_partial=False, response_ids=None):
         n = respondent_counts[key]
         if n == 0:
             continue
-        opts = [
-            {"label": label, "count": count, "pct": round(count / n * 100, 1)}
-            for label, count in sorted(option_counts[key].items(), key=lambda x: -x[1])
-        ]
-        result_questions.append({"key": key, "text": q_info["text"], "n": n, "options": opts})
+        counts = option_counts[key]
+        titles, zero_options = _option_universe(q_info, key, by_version, definitions, counts)
+        if q_info["type"] == "scale":
+            # A scale reads in point order, not by popularity.
+            ordered = sorted(counts.items(), key=lambda x: _scale_sort_key(x[0]))
+        else:
+            ordered = sorted(counts.items(), key=lambda x: -x[1])
+        opts = []
+        for label, count in ordered:
+            opt = {"label": label, "count": count, "pct": round(count / n * 100, 1)}
+            if label in titles:
+                opt["title"] = titles[label]
+            opts.append(opt)
+        result_questions.append({
+            "key": key,
+            "number": q_info["number"],
+            "text": q_info["text"],
+            "n": n,
+            "options": opts,
+            "zero_options": zero_options,
+        })
 
     return {
         "total_responses": total_responses,
@@ -369,7 +493,7 @@ def question_responses(survey, include_partial=False, response_ids=None):
 def response_export(survey, include_partial=False, response_ids=None):
     """Return de-identified per-response answer data for CSV export."""
     catalog = question_catalog(survey, include_partial=include_partial)
-    categorical = [q for q in catalog if not _is_numeric(q["type"], q["key"], q["text"])]
+    categorical = [q for q in catalog if _tabulated(q)]
     keys = [q["key"] for q in categorical]
     catalog_by_key = {q["key"]: q for q in categorical}
 
@@ -403,14 +527,19 @@ def response_export(survey, include_partial=False, response_ids=None):
             q = by_version.get((response.survey_version_id, key))
             if not q or q.type != catalog_by_key[key]["type"]:
                 continue
-            labels = _labels(q, answers.get(key), parsed=definitions.get(q.survey_version_id))
+            parsed = definitions.get(q.survey_version_id)
+            labels = _labels(q, answers.get(key), parsed=parsed)
+            if parsed and _def_options_source(parsed[1], key) == ISO3166_SOURCE:
+                # The grid keeps the code and shows the name on hover; a
+                # spreadsheet has no hover, so the export carries the name.
+                labels = [country_name(label) or label for label in labels]
             row[key] = "; ".join(labels) if labels else ""
         collected.append({"id": response.id, "answers": row})
 
     rows = [{"respondent_id": str(r["id"]), "answers": r["answers"]} for r in collected]
 
     return {
-        "questions": [{"key": q["key"], "text": q["text"]} for q in categorical],
+        "questions": [{"key": q["key"], "number": q["number"], "text": q["text"]} for q in categorical],
         "rows": rows,
         "truncated": truncated,
     }
@@ -490,6 +619,8 @@ def crosstab(survey, x_key, y_key, include_partial=False, response_ids=None):
                 "numeric_summaries": numeric_summaries}
     x_values = sorted({x for x, _ in counts})
     y_values = sorted({y for _, y in counts})
+    x_titles = _axis_titles(x_key, by_version, definitions, x_values)
+    y_titles = _axis_titles(y_key, by_version, definitions, y_values)
     cells = [
         {"x": x, "y": y, "count": counts[(x, y)],
          "pct": round(counts[(x, y)] / paired * 100, 1) if paired else 0.0}
@@ -498,4 +629,16 @@ def crosstab(survey, x_key, y_key, include_partial=False, response_ids=None):
     return {"paired_completions": paired, "x_n": x_n, "y_n": y_n,
             "x_values": x_values, "y_values": y_values, "cells": cells,
             "x_option_counts": dict(x_option_counts),
-            "y_option_counts": dict(y_option_counts)}
+            "y_option_counts": dict(y_option_counts),
+            "x_titles": x_titles, "y_titles": y_titles}
+
+
+def _axis_titles(key, by_version, definitions, values):
+    """Full names for compact axis values (country codes); {} for other questions."""
+    for (version_id, q_key) in by_version:
+        if q_key != key:
+            continue
+        _, by_key = definitions.get(version_id, ("en", {}))
+        if _def_options_source(by_key, key) == ISO3166_SOURCE:
+            return {v: country_name(v) for v in values if country_name(v)}
+    return {}

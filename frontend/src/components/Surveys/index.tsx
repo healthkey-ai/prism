@@ -12,6 +12,7 @@ import type { CohortFilters } from '../../types'
 import CrosstabHeatmap from './CrosstabHeatmap'
 import NumericSummaryPlot from './NumericSummaryPlot'
 import SurveyResponsesGrid from './SurveyResponsesGrid'
+import { questionLabel } from '../../utils/surveyQuestionLabel'
 
 interface Props { filters?: CohortFilters }
 
@@ -106,7 +107,7 @@ export default function Surveys({ filters }: Props) {
     try {
       const exportData = await fetchSurveyResponsesExport(surveyId, includePartial, filters)
       const { questions: qs, rows, truncated } = exportData
-      const header = ['"Respondent ID"', ...qs.map(q => `"${csvCell(q.text)}"`)].join(',')
+      const header = ['"Respondent ID"', ...qs.map(q => `"${csvCell(questionLabel(q))}"`)].join(',')
       const dataRows = rows.map(row =>
         [`"${csvCell(row.respondent_id)}"`, ...qs.map(q => `"${csvCell(row.answers[q.key] ?? '')}"`)].join(',')
       )
@@ -128,16 +129,16 @@ export default function Surveys({ filters }: Props) {
 
   function downloadCrosstabCSV() {
     if (!table || !x || !y) return
-    const xText = questions.find(q => q.key === x)?.text ?? x
-    const yText = questions.find(q => q.key === y)?.text ?? y
-    const header = [`"${csvCell(yText)}"`, ...table.x_values.map(v => `"${csvCell(v)}"`)]
+    const xText = xQuestion || x
+    const yText = yQuestion || y
+    const header = [`"${csvCell(yText)}"`, ...table.x_values.map(v => `"${csvCell(table.x_titles?.[v] ?? v)}"`)]
     const cellMap = new Map<string, Map<string, number>>()
     for (const cell of table.cells) {
       if (!cellMap.has(cell.y)) cellMap.set(cell.y, new Map())
       cellMap.get(cell.y)!.set(cell.x, cell.count)
     }
     const dataRows = table.y_values.map(yVal => {
-      const row = [`"${csvCell(yVal)}"`]
+      const row = [`"${csvCell(table.y_titles?.[yVal] ?? yVal)}"`]
       for (const xVal of table.x_values) {
         row.push(String(cellMap.get(yVal)?.get(xVal) ?? 0))
       }
@@ -158,8 +159,10 @@ export default function Surveys({ filters }: Props) {
   }
 
   const chosenSurvey = surveys.find(s => s.id === surveyId)
-  const xQuestion = questions.find(q => q.key === x)?.text ?? ''
-  const yQuestion = questions.find(q => q.key === y)?.text ?? ''
+  const xChosen = questions.find(q => q.key === x)
+  const yChosen = questions.find(q => q.key === y)
+  const xQuestion = xChosen ? questionLabel(xChosen) : ''
+  const yQuestion = yChosen ? questionLabel(yChosen) : ''
   const cohortActive = filters ? toParams(filters).toString().length > 0 : false
 
   return <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-8">
@@ -236,13 +239,13 @@ export default function Surveys({ filters }: Props) {
           <label className="text-sm font-medium text-gray-700">X question
             <select aria-label="X question" className="mt-2 block w-full rounded-lg border border-gray-300 p-2" value={x} onChange={e => selectX(e.target.value)} disabled={!surveyId}>
               <option value="">Choose a question</option>
-              {questions.filter(q => q.key !== y).map(q => <option key={q.key} value={q.key}>{q.text}</option>)}
+              {questions.filter(q => q.key !== y).map(q => <option key={q.key} value={q.key}>{questionLabel(q)}</option>)}
             </select>
           </label>
           <label className="text-sm font-medium text-gray-700">Y question
             <select aria-label="Y question" className="mt-2 block w-full rounded-lg border border-gray-300 p-2" value={y} onChange={e => selectY(e.target.value)} disabled={!surveyId}>
               <option value="">Choose a question</option>
-              {questions.filter(q => q.key !== x).map(q => <option key={q.key} value={q.key}>{q.text}</option>)}
+              {questions.filter(q => q.key !== x).map(q => <option key={q.key} value={q.key}>{questionLabel(q)}</option>)}
             </select>
           </label>
         </div>
