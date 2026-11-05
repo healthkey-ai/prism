@@ -36,7 +36,7 @@ def test_question_responses_basic(survey_tables):
         survey_version=version, key="country", type="single", order=2,
         text="Country",
     )
-    # scale question — should be excluded (numeric)
+    # scale question — tabulated as a distribution over its points
     SurveyQuestion.objects.create(
         survey_version=version, key="score", type="scale", order=3, text="Score",
     )
@@ -53,11 +53,16 @@ def test_question_responses_basic(survey_tables):
     result = question_responses(survey)
     assert result["total_responses"] == 1
     assert result["include_partial"] is False
-    # scale excluded → only treatments + country
-    assert len(result["questions"]) == 2
+    assert [q["key"] for q in result["questions"]] == ["treatments", "country", "score"]
     q = next(q for q in result["questions"] if q["key"] == "treatments")
     assert q["n"] == 1
     assert q["options"] == [{"label": "BR", "count": 1, "pct": 100.0}]
+    assert q["number"] is None
+    assert q["zero_options"] == []
+    score = next(q for q in result["questions"] if q["key"] == "score")
+    # No definition: the bare point value, and no known universe of points.
+    assert score["options"] == [{"label": "5", "count": 1, "pct": 100.0}]
+    assert score["zero_options"] == []
 
 
 @pytest.mark.django_db
@@ -146,7 +151,7 @@ def test_response_export_structure(survey_tables):
     SurveyAnswer.objects.create(response=r2, question_key="treatment", value={"option": "br"})
 
     result = response_export(survey)
-    assert result["questions"] == [{"key": "treatment", "text": "Treatment"}]
+    assert result["questions"] == [{"key": "treatment", "number": None, "text": "Treatment"}]
     assert len(result["rows"]) == 2
     ids = {row["respondent_id"] for row in result["rows"]}
     assert str(r1.id) in ids
