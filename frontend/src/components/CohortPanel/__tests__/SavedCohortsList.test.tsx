@@ -170,4 +170,38 @@ describe('SavedCohortsList', () => {
       })
     })
   })
+
+  describe('compare toggle', () => {
+    it('is hidden unless a compare handler is supplied', async () => {
+      vi.mocked(client.fetchSavedCohorts).mockResolvedValue(mockCohorts)
+      render(<SavedCohortsList onLoad={onLoad} refreshToken={0} />)
+      await screen.findByText('ISS Stage I')
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('reports the toggled cohort and reflects the selected ids', async () => {
+      const user = userEvent.setup()
+      const onToggleCompare = vi.fn()
+      vi.mocked(client.fetchSavedCohorts).mockResolvedValue(mockCohorts)
+      render(<SavedCohortsList onLoad={onLoad} refreshToken={0} compareIds={[2]} onToggleCompare={onToggleCompare} />)
+      const first = await screen.findByRole('checkbox', { name: 'Compare ISS Stage I' })
+      expect(first).not.toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Compare Triple Refractory' })).toBeChecked()
+      await user.click(first)
+      expect(onToggleCompare).toHaveBeenCalledWith(mockCohorts[0])
+    })
+
+    it('disables unselected cohorts when the comparison is full, and the active cohort always', async () => {
+      vi.mocked(client.fetchSavedCohorts).mockResolvedValue(mockCohorts)
+      render(
+        <SavedCohortsList
+          onLoad={onLoad} refreshToken={0}
+          compareIds={[2]} compareFull onToggleCompare={vi.fn()} activeCohortId={1}
+        />
+      )
+      expect(await screen.findByRole('checkbox', { name: 'Compare ISS Stage I' })).toBeDisabled()
+      // Already selected cohorts stay enabled so they can be removed.
+      expect(screen.getByRole('checkbox', { name: 'Compare Triple Refractory' })).toBeEnabled()
+    })
+  })
 })

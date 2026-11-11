@@ -287,6 +287,16 @@ export interface SubgroupStratification {
   pfs_p?: number | null
 }
 
+/** One cohort plotted on the dashboard: the primary cohort or a saved comparison cohort. */
+export interface CohortSeries {
+  /** Stable identity: 'primary' or 'saved:<id>'. */
+  key: string
+  label: string
+  color: string
+  metrics: MetricsResponse | null
+  loading: boolean
+}
+
 export interface SwitchingRow {
   from_regimen: string
   n_switched: number

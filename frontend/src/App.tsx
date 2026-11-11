@@ -6,7 +6,9 @@ import ResetPasswordPage from './components/Auth/ResetPasswordPage'
 import { useAnalytics } from './hooks/useAnalytics'
 import { useAuth } from './hooks/useAuth'
 import type { AuthState } from './hooks/useAuth'
-import type { CohortFilters } from './types'
+import { useCohortComparison } from './hooks/useCohortComparison'
+import type { CohortFilters, SavedCohort } from './types'
+import { buildSeries, MAX_COMPARE_COHORTS } from './utils/cohortCompare'
 
 function getResetToken(): string | null {
   return new URLSearchParams(window.location.search).get('token')
@@ -40,12 +42,37 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
   const [activeSavedCohortId, setActiveSavedCohortId] = useState<number | null>(null)
   const [activeCohortName, setActiveCohortName] = useState<string | null>(null)
   const [cohortDirty, setCohortDirty] = useState(false)
+  const [compareCohorts, setCompareCohorts] = useState<SavedCohort[]>([])
+  const { comparisons } = useCohortComparison(compareCohorts)
+
+  const primaryLabel = activeCohortName
+    ? (cohortDirty ? `${activeCohortName} (modified)` : activeCohortName)
+    : 'Current cohort'
+  const series = buildSeries(
+    { label: primaryLabel, metrics },
+    comparisons.map(c => ({ id: c.cohort.id, label: c.cohort.name, metrics: c.metrics, loading: c.loading })),
+  )
+
+  function handleToggleCompare(cohort: SavedCohort) {
+    setCompareCohorts(prev => {
+      if (prev.some(c => c.id === cohort.id)) return prev.filter(c => c.id !== cohort.id)
+      if (prev.length >= MAX_COMPARE_COHORTS) return prev
+      return [...prev, cohort]
+    })
+  }
+
+  function handleRenameCohort(cohortId: number, name: string) {
+    setCompareCohorts(prev => prev.map(c => c.id === cohortId ? { ...c, name } : c))
+    if (cohortId === activeSavedCohortId) setActiveCohortName(name)
+  }
 
   function handleLoadCohort(f: CohortFilters, cohortId?: number, cohortName?: string) {
     setFilters(f)
     setActiveSavedCohortId(cohortId ?? null)
     setActiveCohortName(cohortName ?? null)
     setCohortDirty(false)
+    // The loaded cohort is now the primary series; don't plot it twice.
+    if (cohortId != null) setCompareCohorts(prev => prev.filter(c => c.id !== cohortId))
   }
 
   function handleUpdateFilter<K extends keyof CohortFilters>(key: K, val: CohortFilters[K]) {
@@ -82,6 +109,7 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
   }
 
   function handleDeleteCohort(cohortId: number) {
+    setCompareCohorts(prev => prev.filter(c => c.id !== cohortId))
     if (cohortId !== activeSavedCohortId) return
     setActiveSavedCohortId(null)
     setActiveCohortName(null)
@@ -101,6 +129,11 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
         activeCohortName={activeCohortName}
         activeCohortId={activeSavedCohortId}
         cohortDirty={cohortDirty}
+        compareCohorts={compareCohorts}
+        series={series}
+        onToggleCompare={handleToggleCompare}
+        onRenameCohort={handleRenameCohort}
+        onClearCompare={() => setCompareCohorts([])}
       />
       <main className="flex-1 overflow-y-auto">
         {error && (
@@ -110,6 +143,7 @@ function AuthenticatedApp({ auth }: { auth: AuthState }) {
         )}
         <Dashboard
           metrics={metrics}
+          series={series}
           loading={loading}
           disease={filters.disease ?? 'Multiple Myeloma'}
           user={auth.user!}
