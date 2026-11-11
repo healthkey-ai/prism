@@ -6,7 +6,7 @@ exist in the DB until healthkey-ai/promop#2084 lands.  These tests exercise:
 1. Service-layer response_ids filtering (works today with any set of IDs).
 2. _cohort_response_ids view helper: returns None when no cohort params,
    returns None on ProgrammingError (column not in DB), and returns a set
-   of UUIDs when the column exists.
+   of UUIDs when the column exists (patient_id is an integer patient_record id).
 3. View endpoints: without cohort params they return 200 with all responses;
    with unknown cohort params they still return 200 (graceful degradation).
 """
@@ -259,7 +259,7 @@ def test_empty_cohort_with_patient_link_returns_no_responses(survey_tables):
     # the cohort. Without a linked row, the no-linkage fallback returns None.
     _, version, _ = _make_survey("linked-empty-cohort")
     linked = _submit(version, {"option": "us"})
-    SurveyLinkedContact.objects.create(response=linked, email="x@example.com", patient_id=uuid.uuid4())
+    SurveyLinkedContact.objects.create(response=linked, email="x@example.com", patient_id=424242)
 
     request = MagicMock()
     request.query_params = {"disease": "Some Disease"}
@@ -385,3 +385,12 @@ def test_surveys_and_responses_views_scope_to_org(two_org_respondents):
     assert client.get(f"/api/surveys/{survey_id}/responses/?org=SYNTHEA-BC").json()["total_responses"] == 1
     assert client.get(f"/api/surveys/{survey_id}/responses/").json()["total_responses"] == 2
     assert client.get("/api/surveys/?org=SYNTHEA-MM").json() == []
+
+
+@pytest.mark.django_db
+def test_cohort_response_ids_empty_when_user_sees_no_org(two_org_respondents):
+    """A user with no visible organisation has no cohort patients, so no responses."""
+    from surveys.views import _cohort_response_ids
+    request = _staff_request(org="SYNTHEA-FL")
+    with patch("accounts.utils.apply_org_scope", return_value=(None, "forbidden")):
+        assert _cohort_response_ids(request) == set()

@@ -84,7 +84,10 @@ def _cohort_response_ids(request):
             if not participant_link and not contact_link:
                 return None
 
-            base_qs, _ = apply_org_scope(PatientInfo.objects.all(), request.user)
+            base_qs, error = apply_org_scope(PatientInfo.objects.all(), request.user)
+            if error is not None:
+                # No visible organisation means no cohort patients, hence no responses.
+                return set()
             filtered_qs = apply_cohort_filters(request, qs=base_qs)
             response_ids = set()
             if participant_link:

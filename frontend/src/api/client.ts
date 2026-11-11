@@ -93,8 +93,7 @@ export async function fetchMetrics(filters: CohortFilters): Promise<MetricsRespo
 /** Surveys with submitted responses; with `filters`, only those answered by someone in the cohort, with cohort completion counts. */
 export async function fetchSurveys(filters?: CohortFilters): Promise<SurveySummary[]> {
   const params = filters ? toParams(filters) : new URLSearchParams()
-  const query = params.toString()
-  const { data } = await api.get<SurveySummary[]>(query ? `/surveys/?${query}` : '/surveys/')
+  const { data } = await api.get<SurveySummary[]>(`/surveys/?${params}`)
   return data
 }
 

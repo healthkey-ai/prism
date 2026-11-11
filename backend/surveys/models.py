@@ -82,7 +82,8 @@ class SurveyLinkedContact(models.Model):
     # Mirrored from PROMOP once healthkey-ai/promop#2084 adds the column.
     # Until then, filtering on this field raises ProgrammingError which is
     # caught by _cohort_response_ids() in views.py to degrade gracefully.
-    patient_id = models.UUIDField(null=True, db_column="patient_id")
+    # An integer FK to patient_record(id), per promop#2084.
+    patient_id = models.BigIntegerField(null=True, db_column="patient_id")
 
     class Meta:
         managed = False
