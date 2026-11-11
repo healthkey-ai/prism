@@ -43,11 +43,25 @@ describe('useCohortComparison', () => {
     vi.mocked(client.fetchMetrics)
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce(metrics(4))
-    const { result } = renderHook(() => useCohortComparison([cohort(1), cohort(2)]))
+    const cohorts = [cohort(1), cohort(2)]
+    const { result } = renderHook(() => useCohortComparison(cohorts))
     await waitFor(() => expect(result.current.anyLoading).toBe(false))
     expect(result.current.anyError).toBe(true)
     expect(result.current.comparisons[0].error).toMatch(/Failed/)
     expect(result.current.comparisons[0].metrics).toBeNull()
     expect(result.current.comparisons[1].metrics?.cohort.count).toBe(4)
+  })
+
+  it('retries a failed cohort the next time the selection changes', async () => {
+    vi.mocked(client.fetchMetrics)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(metrics(5))
+    const { result, rerender } = renderHook(({ cohorts }) => useCohortComparison(cohorts), {
+      initialProps: { cohorts: [cohort(1)] },
+    })
+    await waitFor(() => expect(result.current.anyError).toBe(true))
+    rerender({ cohorts: [cohort(1), cohort(2)] })
+    await waitFor(() => expect(result.current.comparisons[0].metrics?.cohort.count).toBe(5))
+    expect(result.current.comparisons[0].error).toBeNull()
   })
 })

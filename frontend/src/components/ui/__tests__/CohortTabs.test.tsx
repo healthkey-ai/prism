@@ -29,4 +29,12 @@ describe('CohortTabs', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
     expect(screen.queryByText('chart for Pending')).not.toBeInTheDocument()
   })
+
+  it('keeps the selected cohort when an earlier cohort is removed', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<CohortTabs series={series}>{c => <div>chart for {c.label}</div>}</CohortTabs>)
+    await user.click(screen.getByRole('tab', { name: /Pending/ }))
+    rerender(<CohortTabs series={[series[0], series[2]]}>{c => <div>chart for {c.label}</div>}</CohortTabs>)
+    expect(screen.getByRole('tab', { name: /Pending/ })).toHaveAttribute('aria-selected', 'true')
+  })
 })

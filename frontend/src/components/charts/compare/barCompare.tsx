@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { CohortSeries, MetricsResponse, TherapyCount, TherapyOutcomes } from '../../../types'
 import { pctOf, type CategoryRow } from '../../../utils/cohortCompare'
+import { shortTherapyName as shortName } from '../../../utils/therapyLabel'
+import SegmentedToggle from '../../ui/SegmentedToggle'
 import GroupedBarCompare from './GroupedBarCompare'
 
 /** Rows per series, with an empty list for cohorts whose metrics are missing. */
@@ -8,29 +10,6 @@ function rowsFor(series: CohortSeries[], pick: (m: MetricsResponse) => CategoryR
   return series.map(s => (s.metrics ? pick(s.metrics) : []))
 }
 
-function shortName(name: string): string {
-  return name.split(' (')[0]
-}
-
-function Toggle<K extends string>({ options, value, onChange }: {
-  options: { key: K; label: string }[]; value: K; onChange: (k: K) => void
-}) {
-  return (
-    <div className="flex gap-1 rounded-lg border border-gray-200 p-0.5 bg-gray-50 w-fit mb-4">
-      {options.map(o => (
-        <button
-          key={o.key}
-          onClick={() => onChange(o.key)}
-          className={`px-4 py-1.5 text-xs rounded-md font-semibold transition-colors ${
-            o.key === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function CohortChips({ series, value }: { series: CohortSeries[]; value: (m: MetricsResponse) => string | null }) {
   return (
@@ -83,7 +62,7 @@ export function TherapyCategoriesCompare({ series }: { series: CohortSeries[] })
   const rows = rowsFor(series, m => (m.therapy_categories?.[line] ?? []).map(r => ({ name: r.category, value: r.pct })))
   return (
     <div>
-      <Toggle options={LINE_TABS} value={line} onChange={setLine} />
+      <SegmentedToggle options={LINE_TABS} value={line} onChange={setLine} />
       <GroupedBarCompare series={series} rows={rows} unit="pct" categoryWidth={150} emptyMessage="No data available for this line" />
     </div>
   )

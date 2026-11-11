@@ -2,8 +2,15 @@ import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { CohortSeries } from '../../../types'
 import { mergeCategorySeries, seriesKey } from '../../../utils/cohortCompare'
+import SegmentedToggle from '../../ui/SegmentedToggle'
 
 type Measure = 'diagnoses' | 'treatment_starts'
+
+const MEASURES: { key: Measure; label: string }[] = [
+  { key: 'diagnoses', label: 'New Diagnoses' },
+  { key: 'treatment_starts', label: 'Treatment Starts' },
+]
+
 
 /** One line per cohort for new diagnoses or treatment starts per quarter. */
 export default function IncidenceCompare({ series }: { series: CohortSeries[] }) {
@@ -24,19 +31,7 @@ export default function IncidenceCompare({ series }: { series: CohortSeries[] })
 
   return (
     <div>
-      <div className="flex gap-1 rounded-lg border border-gray-200 p-0.5 bg-gray-50 w-fit mb-4">
-        {([['diagnoses', 'New Diagnoses'], ['treatment_starts', 'Treatment Starts']] as [Measure, string][]).map(([k, label]) => (
-          <button
-            key={k}
-            onClick={() => setMeasure(k)}
-            className={`px-4 py-1.5 text-xs rounded-md font-semibold transition-colors ${
-              measure === k ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SegmentedToggle options={MEASURES} value={measure} onChange={setMeasure} />
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

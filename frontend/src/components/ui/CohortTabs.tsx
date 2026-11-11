@@ -12,8 +12,10 @@ interface Props {
  * (Sankey, sunburst, tables, multi-panel cards).
  */
 export default function CohortTabs({ series, children }: Props) {
-  const [selected, setSelected] = useState(0)
-  const idx = Math.min(selected, series.length - 1)
+  // Keyed by cohort, not index, so removing another cohort keeps this one selected.
+  const [selectedKey, setSelectedKey] = useState(series[0]?.key)
+  const found = series.findIndex(s => s.key === selectedKey)
+  const idx = found >= 0 ? found : 0
   const current = series[idx]
   if (!current) return null
 
@@ -25,7 +27,7 @@ export default function CohortTabs({ series, children }: Props) {
             key={s.key}
             role="tab"
             aria-selected={i === idx}
-            onClick={() => setSelected(i)}
+            onClick={() => setSelectedKey(s.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-semibold transition-colors ${
               i === idx ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}

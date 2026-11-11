@@ -35,7 +35,8 @@ export function useCohortComparison(cohorts: SavedCohort[]) {
   useEffect(() => {
     for (const cohort of cohorts) {
       const key = cacheKey(cohort)
-      if (entries[key] || inFlight.current.has(key)) continue
+      // A failed fetch is retried the next time the selection changes.
+      if ((entries[key] && !entries[key].error) || inFlight.current.has(key)) continue
       inFlight.current.add(key)
       setEntries(prev => ({ ...prev, [key]: { metrics: null, loading: true, error: null } }))
       fetchMetrics(cohort.filters)
