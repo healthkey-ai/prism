@@ -81,9 +81,14 @@ def _is_numeric(question_type, key, text):
     )
 
 
-def survey_catalog():
+def survey_catalog(response_ids=None):
+    """Surveys with at least one submitted response, counted within
+    `response_ids` when a cohort restricts them."""
+    submitted = Q(versions__responses__status="submitted")
+    if response_ids is not None:
+        submitted &= Q(versions__responses__id__in=response_ids)
     surveys = Survey.objects.annotate(
-        completions=Count("versions__responses", filter=Q(versions__responses__status="submitted"))
+        completions=Count("versions__responses", filter=submitted)
     ).filter(completions__gt=0).order_by("title")
     return [{"id": str(s.pk), "title": s.title, "completions": s.completions} for s in surveys]
 
