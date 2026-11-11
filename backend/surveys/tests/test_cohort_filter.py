@@ -280,3 +280,108 @@ def test_patient_link_available_reads_the_table(survey_tables):
     with patch("surveys.views.connection.introspection.get_table_description",
                side_effect=Exception("no such table")):
         assert _patient_link_available() is False
+
+
+# ---------------------------------------------------------------------------
+# Participant link: SurveyResponse.participant_id -> patient_record.person_id
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def patient_tables(django_db_setup, django_db_blocker):
+    from patients.models import PatientInfo, SourceOrganization
+    models = [SourceOrganization, PatientInfo]
+    with django_db_blocker.unblock():
+        with connection.schema_editor() as editor:
+            for model in models:
+                editor.create_model(model)
+    yield
+    with django_db_blocker.unblock():
+        with connection.schema_editor() as editor:
+            for model in reversed(models):
+                editor.delete_model(model)
+
+
+def _patient(person_id, disease, org):
+    from patients.models import PatientInfo
+    return PatientInfo.objects.create(person_id=person_id, disease=disease, organization=org)
+
+
+def _respond(version, participant_id):
+    r = SurveyResponse.objects.create(
+        id=uuid.uuid4(), survey_version=version, status="submitted", participant_id=participant_id,
+    )
+    SurveyAnswer.objects.create(response=r, question_key="country", value={"option": "us"})
+    return r
+
+
+@pytest.fixture
+def two_org_respondents(survey_tables, patient_tables):
+    """One FL respondent and one BC respondent, each a patient of a different org."""
+    from patients.models import SourceOrganization
+    fl_org = SourceOrganization.objects.create(name="SYNTHEA-FL", slug="synthea-fl")
+    bc_org = SourceOrganization.objects.create(name="SYNTHEA-BC", slug="synthea-bc")
+    _patient(101, "Follicular Lymphoma", fl_org)
+    _patient(202, "Breast Cancer", bc_org)
+    survey, version, _ = _make_survey("participant-link")
+    fl_response = _respond(version, 101)
+    bc_response = _respond(version, 202)
+    return SimpleNamespace(survey=survey, fl=fl_response, bc=bc_response)
+
+
+def _staff_request(**params):
+    from urllib.parse import urlencode
+    from django.http import QueryDict
+    request = MagicMock()
+    # A real QueryDict: apply_cohort_filters reads params with getlist().
+    request.query_params = QueryDict(urlencode(params))
+    request.user = SimpleNamespace(is_staff=True, is_authenticated=True)
+    return request
+
+
+@pytest.mark.django_db
+def test_cohort_response_ids_follows_participant_link(two_org_respondents):
+    """An org filter keeps only responses whose participant is one of the org's patients."""
+    from surveys.views import _cohort_response_ids
+    assert _cohort_response_ids(_staff_request(org="SYNTHEA-FL")) == {two_org_respondents.fl.id}
+    assert _cohort_response_ids(_staff_request(org="SYNTHEA-BC")) == {two_org_respondents.bc.id}
+    assert _cohort_response_ids(_staff_request(disease="Follicular Lymphoma")) == {two_org_respondents.fl.id}
+
+
+@pytest.mark.django_db
+def test_cohort_response_ids_empty_cohort_is_empty_when_participants_are_patients(two_org_respondents):
+    """With respondents linked through their participant, a cohort nobody is in hides every response."""
+    from surveys.views import _cohort_response_ids
+    assert _cohort_response_ids(_staff_request(org="SYNTHEA-MM")) == set()
+
+
+@pytest.mark.django_db
+def test_cohort_response_ids_none_when_no_participant_is_a_patient(survey_tables, patient_tables):
+    """Respondents minted for anonymous submissions have no patient record: no link, show all."""
+    from surveys.views import _cohort_response_ids
+    _, version, _ = _make_survey("anonymous-participants")
+    _respond(version, 9001)
+    assert _cohort_response_ids(_staff_request(org="SYNTHEA-FL")) is None
+
+
+@pytest.mark.django_db
+def test_survey_catalog_counts_completions_within_cohort(two_org_respondents):
+    from surveys.services import survey_catalog
+    survey_id = str(two_org_respondents.survey.pk)
+    assert [(s["id"], s["completions"]) for s in survey_catalog()] == [(survey_id, 2)]
+    assert [(s["id"], s["completions"]) for s in survey_catalog(response_ids={two_org_respondents.bc.id})] == [(survey_id, 1)]
+    assert survey_catalog(response_ids=set()) == []
+
+
+@pytest.mark.django_db
+def test_surveys_and_responses_views_scope_to_org(two_org_respondents):
+    """GET /surveys/?org=… lists cohort completions; /responses/ counts only cohort respondents."""
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_staff=True, is_authenticated=True))
+    survey_id = two_org_respondents.survey.pk
+
+    catalog = client.get("/api/surveys/?org=SYNTHEA-BC").json()
+    assert [(s["id"], s["completions"]) for s in catalog] == [(str(survey_id), 1)]
+
+    assert client.get(f"/api/surveys/{survey_id}/responses/?org=SYNTHEA-BC").json()["total_responses"] == 1
+    assert client.get(f"/api/surveys/{survey_id}/responses/").json()["total_responses"] == 2
+    assert client.get("/api/surveys/?org=SYNTHEA-MM").json() == []

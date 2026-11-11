@@ -40,15 +40,19 @@ export default function Surveys({ filters }: Props) {
 
   useEffect(() => {
     let active = true
-    fetchSurveys().then(data => {
-      if (active) setSurveys(data)
+    fetchSurveys(filters).then(data => {
+      if (!active) return
+      setSurveys(data)
     }).catch(() => { if (active) setError('Could not load surveys.') })
     return () => { active = false }
-  }, [])
+  }, [filters])
 
-  // Auto-select when only one survey available
+  // Drop a selection the cohort no longer has respondents to; auto-select when
+  // only one survey is available.
   useEffect(() => {
-    if (surveys.length === 1 && !surveyId) {
+    if (surveyId && !surveys.some(s => s.id === surveyId)) {
+      selectSurvey('')
+    } else if (surveys.length === 1 && !surveyId) {
       selectSurvey(surveys[0].id)
     }
   }, [surveys, surveyId, selectSurvey])
@@ -189,6 +193,11 @@ export default function Surveys({ filters }: Props) {
     )}
     {surveys.length === 1 && surveyId && (
       <p className="text-sm text-gray-700 font-medium">{surveys[0].title} <span className="text-gray-500 font-normal">({surveys[0].completions} completions)</span></p>
+    )}
+    {surveys.length === 0 && !error && (
+      <p className="text-sm text-gray-500">
+        {cohortActive ? 'No survey respondents match the active cohort.' : 'No surveys have been completed yet.'}
+      </p>
     )}
 
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}

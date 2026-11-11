@@ -51,6 +51,11 @@ class SurveyResponse(models.Model):
     id = models.UUIDField(primary_key=True)
     survey_version = models.ForeignKey(SurveyVersion, on_delete=models.DO_NOTHING, related_name="responses")
     status = models.CharField(max_length=16)
+    # PROMOP person who answered (FK to person.person_id in PROMOP). Patients
+    # carry the same id in patient_record.person_id, which is how a response is
+    # placed in a clinical cohort. Nullable here only so test tables need not
+    # supply it.
+    participant_id = models.IntegerField(null=True)
 
     class Meta:
         managed = False
