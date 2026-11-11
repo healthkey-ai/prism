@@ -139,7 +139,8 @@ describe('cohort-aware survey catalog', () => {
     vi.mocked(client.fetchSurveys).mockResolvedValue([])
     rerender(<Surveys filters={{ org: 'SYNTHEA-MM' }} />)
     expect(await screen.findByText('No survey respondents match the active cohort.')).toBeInTheDocument()
-    expect(screen.queryByText('Survey Responses')).not.toBeInTheDocument()
+    // The selection clears in the effect that follows the catalog update.
+    await waitFor(() => expect(screen.queryByText('Survey Responses')).not.toBeInTheDocument())
   })
 
   it('auto-selects the only survey the cohort covers', async () => {
