@@ -42,6 +42,10 @@ const LEVEL_COLORS: Record<number, string> = {
   3: '#7c3aed',
 }
 
+// Stroke opacity for flow links. `rest` must stay high enough that every
+// flow is legible against a white card without hovering.
+const LINK_OPACITY = { rest: 0.55, active: 0.9, dimmed: 0.3 } as const
+
 const WIDTH = 580
 const HEIGHT = 380
 const PAD = { top: 8, right: 120, bottom: 8, left: 8 }
@@ -133,15 +137,21 @@ export default function TreatmentSankey({ data }: Props) {
           const srcNode = link.source as SNode
           const color = LEVEL_COLORS[srcNode.lineLevel] ?? '#9ca3af'
           const isHov = hoveredLink === link
+          // Keep every flow clearly visible at rest; on hover, emphasise the
+          // active flow and only lightly dim the others so context is kept.
+          const opacity = hoveredLink === null
+            ? LINK_OPACITY.rest
+            : isHov ? LINK_OPACITY.active : LINK_OPACITY.dimmed
           return (
             <path
               key={i}
+              data-testid="sankey-link"
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               d={pathGen(link as any) ?? ''}
               fill="none"
               stroke={color}
               strokeWidth={Math.max(1, link.width ?? 1)}
-              strokeOpacity={isHov ? 0.65 : 0.2}
+              strokeOpacity={opacity}
               style={{ cursor: 'pointer', transition: 'stroke-opacity 0.15s' }}
               onMouseEnter={() => setHoveredLink(link)}
               onMouseLeave={() => setHoveredLink(null)}
