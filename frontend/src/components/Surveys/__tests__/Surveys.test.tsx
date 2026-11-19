@@ -121,3 +121,32 @@ it('uses a mean and SD chart when a selected answer is numeric', async () => {
   expect(await screen.findByRole('figure', { name: 'Numeric survey mean and standard deviation chart' })).toBeInTheDocument()
   expect(screen.queryByRole('figure', { name: 'Crosstabulation heatmap' })).not.toBeInTheDocument()
 })
+
+describe('cohort-aware survey catalog', () => {
+  it('passes the cohort filters to the catalog and refetches when they change', async () => {
+    const { rerender } = render(<Surveys filters={{ org: 'SYNTHEA-FL' }} />)
+    await waitFor(() => expect(client.fetchSurveys).toHaveBeenCalledWith({ org: 'SYNTHEA-FL' }))
+    rerender(<Surveys filters={{ org: 'SYNTHEA-BC' }} />)
+    await waitFor(() => expect(client.fetchSurveys).toHaveBeenCalledWith({ org: 'SYNTHEA-BC' }))
+  })
+
+  it('clears a selected survey the new cohort has no respondents to and explains the empty list', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<Surveys filters={{ org: 'SYNTHEA-FL' }} />)
+    await user.selectOptions(await screen.findByLabelText('Survey'), 'survey-1')
+    expect(await screen.findByText('Survey Responses')).toBeInTheDocument()
+
+    vi.mocked(client.fetchSurveys).mockResolvedValue([])
+    rerender(<Surveys filters={{ org: 'SYNTHEA-MM' }} />)
+    expect(await screen.findByText('No survey respondents match the active cohort.')).toBeInTheDocument()
+    // The selection clears in the effect that follows the catalog update.
+    await waitFor(() => expect(screen.queryByText('Survey Responses')).not.toBeInTheDocument())
+  })
+
+  it('auto-selects the only survey the cohort covers', async () => {
+    vi.mocked(client.fetchSurveys).mockResolvedValue([{ id: 'survey-2', title: 'BC survey', completions: 100 }])
+    render(<Surveys filters={{ org: 'SYNTHEA-BC' }} />)
+    expect(await screen.findByText('BC survey')).toBeInTheDocument()
+    await waitFor(() => expect(client.fetchSurveyQuestions).toHaveBeenCalledWith('survey-2'))
+  })
+})

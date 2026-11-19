@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
+import { shortTherapyName as shortName } from '../../utils/therapyLabel'
 import type { TherapyOutcomes } from '../../types'
 
 const OUTCOME_COLORS: Record<string, string> = {
@@ -36,9 +37,6 @@ interface Props {
 
 type ViewMode = 'chart' | 'table'
 
-function shortName(name: string): string {
-  return name.split(' (')[0]
-}
 
 export default function ResponseRates({ data, title }: Props) {
   const [view, setView] = useState<ViewMode>('chart')

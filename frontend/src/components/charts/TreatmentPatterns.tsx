@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
   LabelList,
 } from 'recharts'
+import { shortTherapyName as shortName } from '../../utils/therapyLabel'
 import type { TherapyCount } from '../../types'
 
 interface Props {
@@ -14,9 +15,6 @@ interface Props {
   title: string
 }
 
-function shortName(name: string): string {
-  return name.split(' (')[0]
-}
 
 export default function TreatmentPatterns({ data, title }: Props) {
   if (!data || data.length === 0) {

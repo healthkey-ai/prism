@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import type { CohortFilters, FormSettings } from '../../types'
+import type { CohortFilters, CohortSeries, FormSettings, SavedCohort } from '../../types'
 import { fetchMyOrgs } from '../../api/client'
+import { MAX_COMPARE_COHORTS } from '../../utils/cohortCompare'
 import SaveCohortModal from './SaveCohortModal'
 import SavedCohortsList from './SavedCohortsList'
 
@@ -15,6 +16,13 @@ interface Props {
   activeCohortName: string | null
   activeCohortId: number | null
   cohortDirty: boolean
+  /** Saved cohorts overlaid on the dashboard, in selection order. */
+  compareCohorts?: SavedCohort[]
+  /** Colored series as plotted, so the sidebar legend matches the charts. */
+  series?: CohortSeries[]
+  onToggleCompare?: (cohort: SavedCohort) => void
+  onRenameCohort?: (cohortId: number, name: string) => void
+  onClearCompare?: () => void
 }
 
 function Section({ title, children, defaultOpen = true }: {
@@ -91,7 +99,11 @@ function RangeInputs({ label, minKey, maxKey, filters, onUpdate, step = 1 }: {
   )
 }
 
-export default function CohortPanel({ filters, settings, onUpdate, onClear, cohortCount, onLoadCohort, onDeleteCohort, activeCohortName, activeCohortId, cohortDirty }: Props) {
+export default function CohortPanel({
+  filters, settings, onUpdate, onClear, cohortCount, onLoadCohort, onDeleteCohort,
+  activeCohortName, activeCohortId, cohortDirty,
+  compareCohorts = [], series = [], onToggleCompare, onRenameCohort, onClearCompare,
+}: Props) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [savedRefresh, setSavedRefresh] = useState(0)
   const [orgOptions, setOrgOptions] = useState<{ value: string; label: string }[]>([])
@@ -120,6 +132,37 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
           <span className={`text-xs font-medium truncate ${cohortDirty ? 'text-amber-400' : 'text-teal-400'}`}>
             {cohortDirty ? 'Modified:' : 'Active:'} {activeCohortName}
           </span>
+        </div>
+      )}
+
+      {/* Comparison cohorts */}
+      {compareCohorts.length > 0 && (
+        <div className="px-4 py-2 border-b border-slate-700 bg-slate-900/40">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-semibold text-slate-300">
+              Comparing {series.length} cohorts
+            </span>
+            <button
+              onClick={onClearCompare}
+              className="text-[11px] text-slate-400 hover:text-white"
+              title="Stop comparing"
+            >
+              Clear
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {series.map(s => (
+              <li key={s.key} className="flex items-center gap-2 text-xs text-slate-300">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="truncate flex-1" title={s.label}>{s.label}</span>
+                {s.loading ? (
+                  <span className="text-slate-500 italic">loading…</span>
+                ) : s.metrics ? (
+                  <span className="text-slate-500 tabular-nums">n={s.metrics.cohort.count.toLocaleString()}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -160,7 +203,12 @@ export default function CohortPanel({ filters, settings, onUpdate, onClear, coho
           <SavedCohortsList
             onLoad={(f, id, name) => onLoadCohort(f, id, name)}
             onDelete={onDeleteCohort}
+            onRename={onRenameCohort}
             refreshToken={savedRefresh}
+            compareIds={compareCohorts.map(c => c.id)}
+            onToggleCompare={onToggleCompare}
+            compareFull={compareCohorts.length >= MAX_COMPARE_COHORTS}
+            activeCohortId={activeCohortId}
           />
         </Section>
 

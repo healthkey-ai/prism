@@ -5,7 +5,15 @@ import type { CohortFilters, SavedCohort } from '../../types'
 interface Props {
   onLoad: (filters: CohortFilters, cohortId: number, cohortName: string) => void
   onDelete?: (cohortId: number) => void
+  onRename?: (cohortId: number, name: string) => void
   refreshToken: number
+  /** Ids of cohorts currently overlaid on the dashboard for comparison. */
+  compareIds?: number[]
+  onToggleCompare?: (cohort: SavedCohort) => void
+  /** No further cohorts may be added to the comparison. */
+  compareFull?: boolean
+  /** The cohort loaded into the builder; it is already the primary series. */
+  activeCohortId?: number | null
 }
 
 function responseStatus(err: unknown): number | undefined {
@@ -20,7 +28,10 @@ function responseDetail(err: unknown, fallback: string): string {
   return detail ?? fallback
 }
 
-export default function SavedCohortsList({ onLoad, onDelete, refreshToken }: Props) {
+export default function SavedCohortsList({
+  onLoad, onDelete, onRename, refreshToken,
+  compareIds = [], onToggleCompare, compareFull = false, activeCohortId = null,
+}: Props) {
   const [cohorts, setCohorts] = useState<SavedCohort[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +84,7 @@ export default function SavedCohortsList({ onLoad, onDelete, refreshToken }: Pro
     try {
       const updated = await updateSavedCohort(id, { name: trimmed })
       setCohorts(prev => prev.map(c => c.id === id ? { ...c, name: updated.name } : c))
+      onRename?.(id, updated.name)
     } catch (err) {
       alert(responseDetail(err, 'Failed to rename cohort.'))
     }
@@ -140,6 +152,27 @@ export default function SavedCohortsList({ onLoad, onDelete, refreshToken }: Pro
           {c.description && editingId !== c.id && (
             <p className="text-xs text-slate-500 mt-0.5 truncate">{c.description}</p>
           )}
+          {onToggleCompare && (() => {
+            const comparing = compareIds.includes(c.id)
+            const isActive = c.id === activeCohortId
+            const disabled = isActive || (!comparing && compareFull)
+            const title = isActive
+              ? 'This cohort is loaded in the builder and already shown'
+              : disabled ? 'Comparison limit reached' : 'Overlay this cohort on every chart'
+            return (
+              <label className={`flex items-center gap-1.5 mt-1 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`} title={title}>
+                <input
+                  type="checkbox"
+                  checked={comparing}
+                  disabled={disabled}
+                  onChange={() => onToggleCompare(c)}
+                  aria-label={`Compare ${c.name}`}
+                  className="rounded border-slate-500 bg-slate-700 text-teal-500 focus:ring-teal-500 focus:ring-offset-slate-800"
+                />
+                <span className="text-[11px] text-slate-400">Compare</span>
+              </label>
+            )
+          })()}
         </div>
       ))}
     </div>

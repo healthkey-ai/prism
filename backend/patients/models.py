@@ -19,6 +19,10 @@ class SourceOrganization(models.Model):
 class PatientInfo(models.Model):
     """Read-only mirror of promop's patient_record table. managed=False — no migrations."""
 
+    # PROMOP person this record belongs to; survey responses link to it via
+    # prolog_surveys_surveyresponse.participant_id.
+    person_id = models.IntegerField(null=True)
+
     # demographics
     patient_age = models.IntegerField(null=True)
     gender = models.CharField(max_length=2, null=True)

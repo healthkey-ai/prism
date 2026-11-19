@@ -186,3 +186,54 @@ def test_survey_responses_api_view(survey_tables):
 
     # Not found
     assert client.get(f"/api/surveys/{uuid.uuid4()}/responses/").status_code == 404
+
+
+def _matrix_definition():
+    return {
+        "default_language": "en",
+        "sections": [{"key": "s1", "questions": [{
+            "key": "impact", "type": "matrix",
+            "config": {
+                "rows": [
+                    {"key": "symptoms", "label": {"en": "Symptoms"}},
+                    {"key": "overall_qol", "label": {"en": "Overall quality of life"}},
+                ],
+                "scale": {
+                    "min": 1, "max": 3,
+                    "point_labels": [{"en": "Worse"}, {"en": "No change"}, {"en": "Better"}],
+                    "not_applicable": {"en": "Not applicable"},
+                },
+            },
+        }]}],
+    }
+
+
+@pytest.mark.django_db
+def test_response_export_splits_a_matrix_into_one_column_per_row(survey_tables):
+    survey = Survey.objects.create(id=uuid.uuid4(), slug="matrix-export", title="Matrix export")
+    version = SurveyVersion.objects.create(
+        survey=survey, version="1", created_at=timezone.now(), definition=_matrix_definition(),
+    )
+    SurveyQuestion.objects.create(
+        survey_version=version, key="impact", type="matrix", order=1,
+        text="How has treatment changed each of the following?",
+    )
+    r1 = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+    SurveyAnswer.objects.create(
+        response=r1, question_key="impact", value={"ratings": {"symptoms": 3, "overall_qol": "na"}},
+    )
+    r2 = SurveyResponse.objects.create(id=uuid.uuid4(), survey_version=version, status="submitted")
+    SurveyAnswer.objects.create(response=r2, question_key="impact", value={"skipped": True})
+
+    result = response_export(survey)
+
+    # Columns follow the definition's row order, labelled with the row.
+    assert [(q["key"], q["text"]) for q in result["questions"]] == [
+        ("impact.symptoms", "How has treatment changed each of the following? [Symptoms]"),
+        ("impact.overall_qol", "How has treatment changed each of the following? [Overall quality of life]"),
+    ]
+    by_id = {row["respondent_id"]: row["answers"] for row in result["rows"]}
+    # One bare answer label per cell: countable without splitting.
+    assert by_id[str(r1.id)] == {"impact.symptoms": "Better", "impact.overall_qol": "Not applicable"}
+    # A skipped matrix leaves its cells empty rather than inventing answers.
+    assert by_id[str(r2.id)].get("impact.symptoms", "") == ""

@@ -51,6 +51,11 @@ class SurveyResponse(models.Model):
     id = models.UUIDField(primary_key=True)
     survey_version = models.ForeignKey(SurveyVersion, on_delete=models.DO_NOTHING, related_name="responses")
     status = models.CharField(max_length=16)
+    # PROMOP person who answered (FK to person.person_id in PROMOP). Patients
+    # carry the same id in patient_record.person_id, which is how a response is
+    # placed in a clinical cohort. Nullable here only so test tables need not
+    # supply it.
+    participant_id = models.IntegerField(null=True)
 
     class Meta:
         managed = False
@@ -77,7 +82,8 @@ class SurveyLinkedContact(models.Model):
     # Mirrored from PROMOP once healthkey-ai/promop#2084 adds the column.
     # Until then, filtering on this field raises ProgrammingError which is
     # caught by _cohort_response_ids() in views.py to degrade gracefully.
-    patient_id = models.UUIDField(null=True, db_column="patient_id")
+    # An integer FK to patient_record(id), per promop#2084.
+    patient_id = models.BigIntegerField(null=True, db_column="patient_id")
 
     class Meta:
         managed = False

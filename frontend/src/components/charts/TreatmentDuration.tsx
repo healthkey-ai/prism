@@ -8,6 +8,7 @@ import {
   LabelList,
   Cell,
 } from 'recharts'
+import { shortTherapyName as shortName } from '../../utils/therapyLabel'
 import type { MetricsResponse, TreatmentDurationRow } from '../../types'
 
 const OUTCOME_COLORS: Record<string, string> = {
@@ -19,9 +20,6 @@ const OUTCOME_COLORS: Record<string, string> = {
   'Progressive Disease': '#dc2626',
 }
 
-function shortName(name: string): string {
-  return name.split(' (')[0]
-}
 
 interface Props {
   data: MetricsResponse['treatment_duration']

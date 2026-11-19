@@ -17,18 +17,26 @@ interface Props {
   xLabel?: string
   /** Optional content appended to the legend row (e.g. a p-value badge). */
   legendExtra?: ReactNode
+  /** Per-line stroke colors, indexed like `lines`; defaults to the subgroup palette. */
+  colors?: readonly string[]
+  yLabel?: string
 }
 
-const COLORS = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed']
+const DEFAULT_COLORS = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed']
 
 /**
  * Shared Kaplan-Meier step chart for a set of labelled survival lines.
  * Lines with no curve points are dropped from the plot and legend.
  */
-export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line start', legendExtra }: Props) {
+export default function KMGroupChart({
+  lines, xLabel = 'Months from 1st-line start', legendExtra, colors, yLabel = 'Survival probability',
+}: Props) {
+  // Keep each line's color tied to its original index even after empty lines are dropped.
   const validLines = useMemo(
-    () => (lines ?? []).filter((l) => l.curve && l.curve.length > 0),
-    [lines]
+    () => (lines ?? [])
+      .map((l, i) => ({ ...l, color: (colors ?? DEFAULT_COLORS)[i % (colors ?? DEFAULT_COLORS).length] }))
+      .filter((l) => l.curve && l.curve.length > 0),
+    [lines, colors]
   )
 
   const chartData = useMemo(
@@ -50,8 +58,8 @@ export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line sta
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <div className="flex flex-wrap gap-6">
           {validLines.map((line, i) => (
-            <div key={line.label} className="flex items-center gap-2">
-              <span className="inline-block w-8 h-0.5" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+            <div key={`${line.label}-${i}`} className="flex items-center gap-2">
+              <span className="inline-block w-8 h-0.5" style={{ backgroundColor: line.color }} />
               <span className="text-xs text-gray-600">
                 <span className="font-semibold">{line.label}</span>
                 {' · n='}{line.n}
@@ -78,7 +86,7 @@ export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line sta
             domain={[0, 1]}
             tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
             tick={{ fontSize: 11 }}
-            label={{ value: 'Survival probability', angle: -90, position: 'insideLeft', fontSize: 11, offset: 10 }}
+            label={{ value: yLabel, angle: -90, position: 'insideLeft', fontSize: 11, offset: 10 }}
           />
           <Tooltip
             formatter={(v: unknown, name: unknown) => {
@@ -94,11 +102,11 @@ export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line sta
           <ReferenceLine y={0.5} stroke="#9ca3af" strokeDasharray="4 4" />
           {validLines.map((line, i) => (
             <Line
-              key={line.label}
+              key={`${line.label}-${i}`}
               type="stepAfter"
               dataKey={`g${i}`}
               name={`g${i}`}
-              stroke={COLORS[i % COLORS.length]}
+              stroke={line.color}
               strokeWidth={2}
               dot={false}
             />
@@ -106,11 +114,11 @@ export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line sta
           {/* CI bands — dashed, low opacity, excluded from legend/tooltip */}
           {validLines.map((line, i) => [
             <Line
-              key={`${line.label}_lower`}
+              key={`${line.label}-${i}_lower`}
               type="stepAfter"
               dataKey={`g${i}_lower`}
               name={`g${i}_lower`}
-              stroke={COLORS[i % COLORS.length]}
+              stroke={line.color}
               strokeWidth={1}
               strokeOpacity={0.3}
               strokeDasharray="3 3"
@@ -118,11 +126,11 @@ export default function KMGroupChart({ lines, xLabel = 'Months from 1st-line sta
               legendType="none"
             />,
             <Line
-              key={`${line.label}_upper`}
+              key={`${line.label}-${i}_upper`}
               type="stepAfter"
               dataKey={`g${i}_upper`}
               name={`g${i}_upper`}
-              stroke={COLORS[i % COLORS.length]}
+              stroke={line.color}
               strokeWidth={1}
               strokeOpacity={0.3}
               strokeDasharray="3 3"
