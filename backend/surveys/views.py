@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import connection, transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -68,6 +69,10 @@ def _cohort_response_ids(request):
     Otherwise returns a (possibly empty) set of UUIDs: the responses whose
     participant is a cohort patient, plus any linked contacts pointing at one.
     """
+    if not getattr(settings, "SURVEY_COHORT_SCOPING", False):
+        # Off by default: scoping hid every respondent who is not a patient
+        # (anonymous web submissions) as soon as a cohort filter was active.
+        return None
     cohort_params = {k for k in request.query_params if k not in _SURVEY_PARAMS}
     if not cohort_params:
         return None
