@@ -285,6 +285,36 @@ def _def_scale_label(by_key, question_key, answer, lang):
     return None
 
 
+def _matrix_cells(question, value, def_lang, def_by_key):
+    """One answered matrix as [(row_key, row_label, answer_label)], in answer order.
+
+    Row labels come from the version definition (config.rows / rows_from),
+    falling back to the rows related manager if the definition has none.
+    Column (answer) labels for scale matrices come from config.scale in the
+    definition; for option matrices the projection is used as usual.
+    """
+    if not isinstance(value, dict) or value.get("skipped"):
+        return []
+    ratings = value.get("ratings") or {}
+    row_labels = _def_row_labels(def_by_key, question.key, def_lang) if def_by_key else {}
+    if not row_labels:
+        rows_attr = getattr(question, "rows", None)
+        if rows_attr is not None and callable(getattr(rows_attr, "all", None)):
+            row_labels = {r.key: r.label for r in rows_attr.all()}
+    option_labels = {o.key: o.label for o in question.options.all()}
+    if def_by_key:
+        option_labels = {**option_labels, **(_def_option_labels(def_by_key, question.key, def_lang) or {})}
+
+    def answer_label(answer):
+        if def_by_key:
+            scale_lbl = _def_scale_label(def_by_key, question.key, answer, def_lang)
+            if scale_lbl is not None:
+                return scale_lbl
+        return option_labels.get(answer, str(answer))
+
+    return [(row, row_labels.get(row, row), answer_label(answer)) for row, answer in ratings.items()]
+
+
 def _labels(question, value, version_def=None, parsed=None):
     """Labels for one answer. Pass `parsed` (from _parsed_definitions) when labelling
     many answers; `version_def` is parsed on every call."""
@@ -308,27 +338,9 @@ def _labels(question, value, version_def=None, parsed=None):
         selected = [value.get(question.type)]
     if question.type == "matrix":
         # A matrix has several row values, each a separate categorical answer.
-        # Row labels come from the version definition (config.rows / rows_from),
-        # falling back to the rows related manager if the definition has none.
-        # Column (answer) labels for scale matrices come from config.scale in the
-        # definition; for option matrices the projection is used as usual.
-        ratings = value.get("ratings") or {}
-        row_labels = _def_row_labels(def_by_key, question.key, def_lang) if def_by_key else {}
-        if not row_labels:
-            rows_attr = getattr(question, "rows", None)
-            if rows_attr is not None and callable(getattr(rows_attr, "all", None)):
-                row_labels = {r.key: r.label for r in rows_attr.all()}
-
-        def _col_label(answer):
-            if def_by_key:
-                scale_lbl = _def_scale_label(def_by_key, question.key, answer, def_lang)
-                if scale_lbl is not None:
-                    return scale_lbl
-            return option_labels.get(answer, str(answer))
-
         selected = [
-            f"{row_labels.get(row, row)}: {_col_label(answer)}"
-            for row, answer in ratings.items()
+            f"{row_label}: {answer_label}"
+            for _, row_label, answer_label in _matrix_cells(question, value, def_lang, def_by_key)
         ]
     if question.type == "ranking":
         return [f"{position}: {option_labels.get(key, key)}" for position, key in
@@ -520,6 +532,14 @@ def response_export(survey, include_partial=False, response_ids=None):
         Prefetch("answers", queryset=SurveyAnswer.objects.filter(question_key__in=keys))
     )
     MAX_EXPORT_ROWS = 10_000
+    # {matrix key: {row key: row label}}, seeded in the definition's row order
+    # so the columns follow the questionnaire, then extended by what was answered.
+    matrix_columns = {}
+    for (version_id, key), q in by_version.items():
+        if q.type == "matrix" and definitions.get(version_id):
+            lang, by_key = definitions[version_id]
+            for row_key, row_label in _def_row_labels(by_key, key, lang).items():
+                matrix_columns.setdefault(key, {}).setdefault(row_key, row_label)
     collected = []
     truncated = False
     for response in responses.iterator(chunk_size=500):
@@ -533,6 +553,16 @@ def response_export(survey, include_partial=False, response_ids=None):
             if not q or q.type != catalog_by_key[key]["type"]:
                 continue
             parsed = definitions.get(q.survey_version_id)
+            if q.type == "matrix":
+                # One column per matrix row, so each is a ready-made series
+                # (count the answers in a column for one bar of a stacked chart).
+                def_lang, def_by_key = parsed if parsed is not None else ("en", {})
+                for row_key, row_label, answer_label in _matrix_cells(
+                    q, answers.get(key), def_lang, def_by_key
+                ):
+                    matrix_columns.setdefault(key, {}).setdefault(row_key, row_label)
+                    row[f"{key}.{row_key}"] = answer_label
+                continue
             labels = _labels(q, answers.get(key), parsed=parsed)
             if parsed and _def_options_source(parsed[1], key) == ISO3166_SOURCE:
                 # The grid keeps the code and shows the name on hover; a
@@ -543,8 +573,20 @@ def response_export(survey, include_partial=False, response_ids=None):
 
     rows = [{"respondent_id": str(r["id"]), "answers": r["answers"]} for r in collected]
 
+    questions = []
+    for q in categorical:
+        if q["type"] == "matrix":
+            for row_key, row_label in matrix_columns.get(q["key"], {}).items():
+                questions.append({
+                    "key": f"{q['key']}.{row_key}",
+                    "number": q["number"],
+                    "text": f"{q['text']} [{row_label}]",
+                })
+        else:
+            questions.append({"key": q["key"], "number": q["number"], "text": q["text"]})
+
     return {
-        "questions": [{"key": q["key"], "number": q["number"], "text": q["text"]} for q in categorical],
+        "questions": questions,
         "rows": rows,
         "truncated": truncated,
     }
