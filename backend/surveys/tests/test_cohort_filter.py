@@ -134,6 +134,21 @@ def test_crosstab_response_ids_filters_correctly(survey_tables):
     assert result["paired_completions"] == 1
 
 
+@pytest.fixture(autouse=True)
+def _scoping_on(settings):
+    """These tests exercise the scoping, which is off by default (SURVEY_COHORT_SCOPING)."""
+    settings.SURVEY_COHORT_SCOPING = True
+
+
+@pytest.mark.django_db
+def test_cohort_scoping_is_off_by_default(two_org_respondents, settings):
+    """Off: a cohort filter never hides responses, patients or not."""
+    from surveys.views import _cohort_response_ids
+    settings.SURVEY_COHORT_SCOPING = False
+    assert _cohort_response_ids(_staff_request(org="SYNTHEA-FL")) is None
+    assert _cohort_response_ids(_staff_request(org="SYNTHEA-MM")) is None
+
+
 # ---------------------------------------------------------------------------
 # _cohort_response_ids helper
 # ---------------------------------------------------------------------------

@@ -11,6 +11,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Fail loudly if SECRET_KEY is missing or is the dev placeholder in production
 _SECRET_KEY = os.environ.get("SECRET_KEY", "")
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
+# Scope survey responses to the active cohort through the respondent's person (#99).
+# Off: it hid every respondent who is not a patient.
+SURVEY_COHORT_SCOPING = os.environ.get("SURVEY_COHORT_SCOPING", "false").lower() == "true"
 
 if not _SECRET_KEY:
     if not DEBUG:
