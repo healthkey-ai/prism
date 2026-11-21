@@ -118,6 +118,18 @@ Alternatively, the repository includes a standalone seed script for 100 Multiple
 DATABASE_URL="postgresql://..." python seed_mm_patients.py
 ```
 
+To add reproducible synthetic mortality to Render staging's `SYNTHEA-MM` demo
+cohort, use `seed_staging_mm_deaths.py`. It reads `STAGING_DATABASE_URL`, defaults
+to a dry run, preserves existing outcomes, and writes OMOP Death, the analytics
+mirror, and provenance atomically. Dates never precede recorded clinical care;
+same-day lab observations are allowed. The illustrative demo probabilities are
+not fitted clinical estimates.
+
+```bash
+python seed_staging_mm_deaths.py --cutoff 2026-09-14
+python seed_staging_mm_deaths.py --cutoff 2026-09-14 --apply
+```
+
 ## Deploying to Render
 
 **Root Directory:** `backend`
